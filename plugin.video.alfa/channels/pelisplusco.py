@@ -7,14 +7,19 @@ import re
 import urllib
 from platformcode import logger
 from platformcode import config
+from core import jsontools
 from core import scrapertools
 from core.item import Item
 from core import servertools
 from core import httptools
 from core import tmdb
 
-
 host = 'http://pelisplus.co'
+CHANNEL_HEADERS = [
+                  ["Host", host.replace("http://","")],
+                  ["X-Requested-With", "XMLHttpRequest"]
+                  ]
+
 
 def mainlist(item):
     logger.info()
@@ -55,7 +60,52 @@ def movie_menu(item):
                                seccion='anios'
                                ))
 
+    itemlist.append(item.clone(title="Buscar",
+                               action="search",
+                               url=host + "/suggest/?query=",
+                               type="m",
+                               seccion='buscar'
+                               ))
+
     return itemlist
+
+
+def search(item, texto):
+    logger.info()
+    if not item.type:
+        item.type = "m"
+        item.url = host + "/suggest/?query="
+    item.url = item.url + texto
+    if texto != '':
+        return sub_search(item)
+    else:
+        return []
+
+
+def sub_search(item):
+    logger.info()
+    itemlist =[]
+    data = httptools.downloadpage(item.url, add_referer=True).data
+    dict_data = jsontools.load(data)
+    list =dict_data["data"] [item.type]
+    if item.type == "m":
+        action = "findvideos"
+    else:
+        action = "seasons"
+    for dict in list:
+        itemlist.append(item.clone(channel = item.channel,
+                             action = action,
+                             fulltitle = dict["title"],
+                             show = dict["title"],
+                             infoLabels={"year":dict["release_year"]},
+                             thumbnail = "http://static.pelisfox.tv/static/movie/" + dict["cover"],
+                             title = dict["title"] + " (" + dict["release_year"] + ")",
+                             url = host + dict["slug"]
+                             ))
+    tmdb.set_infoLabels(itemlist)
+    return itemlist
+
+    
 
 def series_menu(item):
 
@@ -67,6 +117,13 @@ def series_menu(item):
                                action="list_all",
                                url=host + '/series/',
                                type='serie'
+                               ))
+
+    itemlist.append(item.clone(title="Buscar",
+                               action="search",
+                               url=host + "/suggest/?query=",
+                               type="s",
+                               seccion='buscar'
                                ))
 
     return itemlist
@@ -82,40 +139,34 @@ def get_source(url):
 def list_all (item):
     logger.info ()
     itemlist = []
-
-    if item.type not in ['normal', 'seccion', 'serie']:
-        post = {'page':item.page, 'type':item.type,'id':item.id}
-        post = urllib.urlencode(post)
-        data =httptools.downloadpage(item.url, post=post).data
-        data = re.sub(r'"|\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
-    else:
-        data = get_source(item.url)
-    if item.type == 'serie' or item.type == 'recents':
+    if item.type in ['serie','recents']:
         contentType = 'serie'
         action = 'seasons'
     else:
         contentType = 'pelicula'
         action = 'findvideos'
-
-    patron = 'item-%s><a href=(.*?)><figure><img.*?data-src=(.*?) alt=.*?<p>(.*?)<\/p><span>(\d{4})<\/span>'%contentType
-
-    matches = re.compile(patron,re.DOTALL).findall(data)
-
+    if item.type not in ['normal', 'seccion', 'serie']:
+        post = {'page':item.page, 'type':item.type,'slug':item.slug,'id':item.id}
+        post = urllib.urlencode(post)
+        data =httptools.downloadpage(item.url, post=post, headers=CHANNEL_HEADERS).data
+        data = re.sub(r'"|\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
+        patron ='<a href=(.*?)><figure><img.*?src=(.*?) alt=.*?<p>(.*?)<\/p><span>(\d{4})<\/span>'
+    else:
+        data = get_source(item.url)
+        patron = 'item-%s><a href=(.*?)><figure><img.*?data-src=(.*?) alt=.*?<p>(.*?)<\/p><span>(\d{4})</span>'%contentType
+    matches = scrapertools.find_multiple_matches(data, patron)
     for scrapedurl, scrapedthumbnail, scrapedtitle, scrapedyear in matches:
         url = host+scrapedurl+'p001/'
         thumbnail = scrapedthumbnail
-        plot= ''
         contentTitle=scrapedtitle
         title = contentTitle
         year = scrapedyear
-        fanart =''
-        
         new_item=item.clone(action=action,
                             title=title,
                             url=url,
                             thumbnail=thumbnail,
-                            plot=plot,
-                            fanart=fanart,
+                            plot="",
+                            fanart="",
                             infoLabels ={'year':year}
                             )
         if contentType =='serie':
@@ -141,13 +192,15 @@ def list_all (item):
             else:
                 id =''
         else:
+            if not item.page:
+                item.page = "1"
             page = str(int(item.page)+1)
             id = item.id
 
         if type =='recents':
-            type_pagination = '/series/pagination'
+            type_pagination = '/series/pagination/'
         else:
-            type_pagination = '/pagination'
+            type_pagination = '/pagination/'
 
         url = host+type_pagination
 
@@ -164,29 +217,35 @@ def seccion(item):
     logger.info()
     itemlist = []
     data = get_source(item.url)
+    page = "1"
     if item.seccion == 'generos':
         patron = '<li><a href=(.*?)><i class=ion-cube><\/i>(.*?)<\/span>'
         type = 'genre'
+        pat = 'genero/'
     elif item.seccion == 'anios':
         patron = '<li><a href=(\/peliculas.*?)>(\d{4})<\/a>'
         type = 'year'
-    matches = re.compile(patron, re.DOTALL).findall(data)
+        pat = 'peliculas-'
+    matches = scrapertools.find_multiple_matches(data, patron)
     for scrapedurl, scrapedtitle in matches:
         title = scrapedtitle
         if item.seccion == 'generos':
             cant = re.sub(r'.*?<span class=cant-genre>','',scrapedtitle)
             only_title = re.sub(r'<.*','',scrapedtitle).rstrip()
             title = only_title+' (%s)'%cant
-
         url = host+scrapedurl
-
+        slug = scrapertools.find_single_match(scrapedurl, "%s(.*?)/" %pat)
+        if item.seccion in ['generos', 'anios']:
+            url = host + "/pagination/"
         itemlist.append(
-            Item(channel=item.channel,
-                 action="list_all",
-                 title=title,
+            Item(action="list_all",
+                 channel=item.channel,
                  fulltitle=item.title,
-                 url=url,
-                 type = 'seccion'
+                 page = "1",
+                 slug = slug,
+                 title=title,
+                 type = type,
+                 url=url
                  ))
         # Paginacion
 
@@ -256,20 +315,16 @@ def season_episodes(item):
 
     return itemlist[::-1]
 
-
-def findvideos(item):
+def get_links_by_language(item, data):
     logger.info()
-    itemlist = []
+
     video_list = []
-    data = httptools.downloadpage(item.url).data
-    data = re.sub(r'"|\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
 
-    patron = 'data-source=(.*?) .*?tab.*?data.*?srt=(.*?) data-iframe=><a>(.*?)\s?-\s?(.*?)<\/a>'
+    language = scrapertools.find_single_match(data, 'ul id=level\d_(.*?)\s*class=')
+    patron = 'data-source=(.*?)data.*?srt=(.*?)data-iframe.*?Opci.*?<.*?hidden>[^\(]\((.*?)\)'
+    matches = re.compile(patron, re.DOTALL).findall(data)
 
-    matches = matches = re.compile(patron, re.DOTALL).findall(data)
-
-    for url, sub, language, quality in matches:
-
+    for url, sub, quality in matches:
         if 'http' not in url:
 
             new_url = 'https://onevideo.tv/api/player?key=90503e3de26d45e455b55e9dc54f015b3d1d4150&link' \
@@ -281,22 +336,34 @@ def findvideos(item):
             for video_url in video_list:
                 video_url.channel = item.channel
                 video_url.action = 'play'
-                video_url.title = item.title + '(%s) (%s)' % (language, video_url.server)
+                video_url.title = item.title + '(%s) (%s)' % ('', video_url.server)
                 if video_url.language == '':
                     video_url.language = language
                 video_url.subtitle = sub
-                video_url.contentTitle=item.contentTitle
+                video_url.contentTitle = item.contentTitle
+
         else:
-            server = servertools.get_server_from_url(url)
-            video_list.append(item.clone(title=item.title,
+            video_list.append(item.clone(title='%s [%s] [%s]',
                                          url=url,
                                          action='play',
-                                         quality = quality,
-                                         language = language,
-                                         server=server,
-                                         subtitle = sub
+                                         quality=quality,
+                                         language=language,
+                                         subtitle=sub
                                          ))
 
+    return video_list
+
+def findvideos(item):
+    logger.info()
+    itemlist = []
+    video_list = []
+    data = httptools.downloadpage(item.url).data
+    data = re.sub(r'"|\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
+    patron_language ='(<ul id=level\d_.*?\s*class=.*?ul>)'
+    matches = re.compile(patron_language, re.DOTALL).findall(data)
+
+    for language in matches:
+        video_list.extend(get_links_by_language(item, language))
 
     if config.get_videolibrary_support() and len(itemlist) > 0 and item.extra != 'findvideos':
         itemlist.append(
@@ -307,6 +374,6 @@ def findvideos(item):
                  extra="findvideos",
                  contentTitle=item.contentTitle
                  ))
-
+    video_list = servertools.get_servers_itemlist(video_list, lambda i: i.title % (i.server.capitalize(), i.language,i.quality) )
     return video_list
 

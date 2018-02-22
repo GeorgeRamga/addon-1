@@ -13,7 +13,7 @@ from core.item import Item
 from platformcode import config, logger
 from platformcode import platformtools
 
-host = "http://hdfull.tv"
+host = "https://hdfull.me"
 
 if config.get_setting('hdfulluser', 'hdfull'):
     account = True
@@ -42,9 +42,7 @@ def login():
 
 def mainlist(item):
     logger.info()
-
     itemlist = []
-
     itemlist.append(Item(channel=item.channel, action="menupeliculas", title="Películas", url=host, folder=True))
     itemlist.append(Item(channel=item.channel, action="menuseries", title="Series", url=host, folder=True))
     itemlist.append(Item(channel=item.channel, action="search", title="Buscar..."))
@@ -344,14 +342,14 @@ def fichas(item):
         if str != "": title += str
 
         if item.title == "Buscar...":
-            tag_type = scrapertools.get_match(url, 'l.tv/([^/]+)/')
+            bus = host[-4:]
+            tag_type = scrapertools.find_single_match(url, '%s/([^/]+)/' %bus)
             title += " - [COLOR blue]" + tag_type.capitalize() + "[/COLOR]"
 
         itemlist.append(
             Item(channel=item.channel, action=action, title=title, url=url, fulltitle=title, thumbnail=thumbnail,
                  show=show, folder=True, contentType=contentType, contentTitle=contentTitle,
                  language =language, infoLabels=infoLabels))
-
     ## Paginación
     next_page_url = scrapertools.find_single_match(data, '<a href="([^"]+)">.raquo;</a>')
     if next_page_url != "":
@@ -569,7 +567,7 @@ def generos(item):
     itemlist = []
 
     data = agrupa_datos(httptools.downloadpage(item.url).data)
-    data = scrapertools.find_single_match(data, '<li class="dropdown"><a href="http://hdfull.tv/peliculas"(.*?)</ul>')
+    data = scrapertools.find_single_match(data, '<li class="dropdown"><a href="%s/peliculas"(.*?)</ul>' % host)
 
     patron = '<li><a href="([^"]+)">([^<]+)</a></li>'
     matches = re.compile(patron, re.DOTALL).findall(data)
@@ -591,7 +589,7 @@ def generos_series(item):
     itemlist = []
 
     data = agrupa_datos(httptools.downloadpage(item.url).data)
-    data = scrapertools.find_single_match(data, '<li class="dropdown"><a href="http://hdfull.tv/series"(.*?)</ul>')
+    data = scrapertools.find_single_match(data, '<li class="dropdown"><a href="%s/series"(.*?)</ul>' % host)
 
     patron = '<li><a href="([^"]+)">([^<]+)</a></li>'
     matches = re.compile(patron, re.DOTALL).findall(data)
@@ -642,10 +640,10 @@ def findvideos(item):
         it1.append(Item(channel=item.channel, action="set_status", title=title, fulltitle=title, url=url_targets,
                              thumbnail=item.thumbnail, show=item.show, folder=True))
 
-    data_js = httptools.downloadpage("http://hdfull.tv/templates/hdfull/js/jquery.hdfull.view.min.js").data
+    data_js = httptools.downloadpage("%s/templates/hdfull/js/jquery.hdfull.view.min.js" % host).data
     key = scrapertools.find_single_match(data_js, 'JSON.parse\(atob.*?substrings\((.*?)\)')
 
-    data_js = httptools.downloadpage("http://hdfull.tv/js/providers.js").data
+    data_js = httptools.downloadpage("%s/js/providers.js" % host).data
 
     try:
         data_js = jhexdecode(data_js)
@@ -749,7 +747,7 @@ def agrupa_datos(data):
 
 
 def extrae_idiomas(bloqueidiomas):
-    logger.info("idiomas=" + bloqueidiomas)
+    logger.info()
     language=[]
     textoidiomas = ''
     patronidiomas = '([a-z0-9]+).png"'

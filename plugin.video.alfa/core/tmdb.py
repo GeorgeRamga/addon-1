@@ -423,11 +423,11 @@ def set_infoLabels_item(item, seekTmdb=True, idioma_busqueda='es', lock=None):
 
                         otmdb = Tmdb(texto_buscado=titulo_buscado, tipo=tipo_busqueda, idioma_busqueda=idioma_busqueda,
                                      filtro=item.infoLabels.get('filtro', {}), year=item.infoLabels['year'])
-
-                if otmdb.get_id() and config.get_setting("tmdb_plus_info", default=False):
-                    # Si la busqueda ha dado resultado y no se esta buscando una lista de items,
-                    # realizar otra busqueda para ampliar la informacion
-                    otmdb = Tmdb(id_Tmdb=otmdb.result.get("id"), tipo=tipo_busqueda, idioma_busqueda=idioma_busqueda)
+                if otmdb is not None:
+                    if otmdb.get_id() and config.get_setting("tmdb_plus_info", default=False):
+                        # Si la busqueda ha dado resultado y no se esta buscando una lista de items,
+                        # realizar otra busqueda para ampliar la informacion
+                        otmdb = Tmdb(id_Tmdb=otmdb.result.get("id"), tipo=tipo_busqueda, idioma_busqueda=idioma_busqueda)
 
             if lock and lock.locked():
                 lock.release()
@@ -1258,13 +1258,13 @@ class Tmdb(object):
                 self.temporada[numtemporada] = {"status_code": 15, "status_message": "Failed"}
                 self.temporada[numtemporada] = {"episodes": {}}
 
-            # if "status_code" in self.temporada[numtemporada]:
-            #     # Se ha producido un error
-            #     msg = "La busqueda de " + buscando + " no dio resultados."
-            #     msg += "\nError de tmdb: %s %s" % (
-            #     self.temporada[numtemporada]["status_code"], self.temporada[numtemporada]["status_message"])
-            #     logger.debug(msg)
-            #     self.temporada[numtemporada] = {"episodes": {}}
+            if "status_code" in self.temporada[numtemporada]:
+                #Se ha producido un error
+                msg = "La busqueda de " + buscando + " no dio resultados."
+                msg += "\nError de tmdb: %s %s" % (
+                self.temporada[numtemporada]["status_code"], self.temporada[numtemporada]["status_message"])
+                logger.debug(msg)
+                self.temporada[numtemporada] = {"episodes": {}}
 
         return self.temporada[numtemporada]
 
