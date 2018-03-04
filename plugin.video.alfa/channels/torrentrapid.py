@@ -3,6 +3,7 @@
 import re
 import urllib
 import urlparse
+import requests
 
 from core import servertools
 from core import scrapertools
@@ -10,7 +11,7 @@ from core.item import Item
 from platformcode import logger
 from core import httptools
 
-Host='http://www.tvsinpagar.com'
+Host='http://torrentrapid.com'
 
 
 def mainlist(item):
@@ -19,14 +20,32 @@ def mainlist(item):
     itemlist = []
     itemlist.append(Item(channel=item.channel, action="submenu", title="Películas",url=Host+"/peliculas/"))
     itemlist.append(Item(channel=item.channel, action="submenu", title="Series",url=Host+"/series/"))
-    #itemlist.append(Item(channel=item.channel, action="listado", title="Anime", url=Host+"/anime/",
-    #                     viewmode="movie_with_plot"))
-    #itemlist.append(
-    #    Item(channel=item.channel, action="listado", title="Documentales", url=Host+"/documentales/",
-    #         viewmode="movie_with_plot"))
-    #itemlist.append(Item(channel=item.channel, action="search", title="Buscar"))
+    itemlist.append(Item(channel=item.channel, action="search", title="Buscar"))
     return itemlist
 
+def search(item, texto):
+    logger.info()
+    itemlist = []
+    
+    payload = {'q': 'data'}
+    payload["q"] = texto
+    data = requests.post("http://torrentrapid.com/buscar", data=payload)
+	
+    data = re.sub(r"\n|\r|\t|\s{2}|&nbsp;", "", data.text)
+    patron_data='<ul class="buscar-list">(.+?)</ul>'
+    data_listado = scrapertools.find_single_match(data, patron_data)
+	
+    data_listado=re.sub("Descargar Todas ", "",data_listado)
+    data_listado=re.sub("Descargar Pel\xedculas ", "",data_listado)
+    data_listado=re.sub("Descargar ", "",data_listado)
+    patron_listado='<li><a href="(.+?)" title="(.+?)"><img src="(.+?)"'
+    
+    matches = scrapertools.find_multiple_matches(data_listado, patron_listado)
+    for scrapedurl, scrapedtitle, scrapedimg in matches:
+        itemlist.append(item.clone(title=scrapedtitle, url=scrapedurl,action="findvideos"))
+    
+    return itemlist
+	
 def submenu(item):
     logger.info()
     itemlist = []
@@ -41,7 +60,6 @@ def submenu(item):
         itemlist.append(item.clone(title=scrapedtitle, url=scrapedurl,action="listado"))
     return itemlist
 
-
 def listado(item):
     logger.info()
     itemlist = []
@@ -51,17 +69,17 @@ def listado(item):
     data_listado = scrapertools.find_single_match(data, patron_data)
     patron_listado='<li><a href="(.+?)" title=".+?"><img src="(.+?)".+?><h2'
     if 'Serie' in item.title:
-    	patron_listado+='.+?>'
+        patron_listado+='.+?>'
     else:
-    	patron_listado+='>'
+        patron_listado+='>'
     patron_listado+='(.+?)<\/h2><span>(.+?)<\/span><\/a><\/li>'
     matches = scrapertools.find_multiple_matches(data_listado, patron_listado)
     for scrapedurl, scrapedthumbnail,scrapedtitle,scrapedquality in matches:
-    	if 'Serie' in item.title:
-    		action="episodios"
-    	else:
-    		action="findvideos"    	
-    	itemlist.append(item.clone(title=scrapedtitle, url=scrapedurl,thumbnail=scrapedthumbnail, action=action, quality=scrapedquality,show=scrapedtitle))
+        if 'Serie' in item.title:
+            action="episodios"
+        else:
+            action="findvideos"     
+        itemlist.append(item.clone(title=scrapedtitle, url=scrapedurl,thumbnail=scrapedthumbnail, action=action, quality=scrapedquality,show=scrapedtitle))
     # Página siguiente
     patron_pag='<ul class="pagination"><li><a class="current" href=".+?">.+?<\/a>.+?<a href="(.+?)">'
     siguiente = scrapertools.find_single_match(data, patron_pag)
@@ -76,14 +94,13 @@ def episodios(item):
     data = re.sub(r"\n|\r|\t|\s{2}|&nbsp;", "", data)
     patron_data='<ul class="buscar-list">(.+?)</ul>'
     data_listado = scrapertools.find_single_match(data, patron_data)
-    patron = '<img src="(.+?)" alt=".+?">.+?<div class=".+?">.+?<a href=(.+?)" title=".+?">.+?>Serie.+?>(.+?)<'
+    patron = '<img src="(.+?)" alt=".+?">.+?<div class=".+?">.+?<a href="(.+?)" title=".+?">.+?>Serie.+?>(.+?)<'
     matches = scrapertools.find_multiple_matches(data_listado, patron)
     for scrapedthumbnail,scrapedurl, scrapedtitle in matches:
-    	if " al " in scrapedtitle:
-    		#action="episodios"
-    		titulo=scrapedurl.split('http')
-    		scrapedurl="http"+titulo[1]
-    	itemlist.append(item.clone(title=scrapedtitle, url=scrapedurl,thumbnail=scrapedthumbnail, action="findvideos", show=scrapedtitle))
+        if " al " in scrapedtitle:
+            titulo=scrapedurl.split('http')
+            scrapedurl="http"+titulo[1]
+        itemlist.append(item.clone(title=scrapedtitle, url=scrapedurl,thumbnail=scrapedthumbnail, action="findvideos", show=scrapedtitle))
     return itemlist
 
 def findvideos(item):
