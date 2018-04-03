@@ -6,6 +6,7 @@ import urllib
 from core import httptools
 from core import scrapertools
 from core import servertools
+from core import tmdb
 from core.item import Item
 from platformcode import config, logger
 from channelselector import get_thumb
@@ -45,6 +46,8 @@ def mainlist(item):
     itemlist.append(item.clone(title="Deportes", action="entradas", url="%s/deportes/" % host,
                                fanart="http://i.imgur.com/ggFFR8o.png",
                                thumbnail=get_thumb('deporte', auto=True)))
+    itemlist.append(item.clone(title="Programas de tv", action="entradas", url="%s/otros/programas-de-tv/" % host,
+                               thumbnail=get_thumb('de la tv', auto=True)))
     itemlist.append(item.clone(title="", action=""))
     itemlist.append(item.clone(title="Buscar...", action="search", thumbnail=get_thumb('search', auto=True)))
     itemlist.append(item.clone(action="setting_channel", title="Configurar canal...", text_color="gold", folder=False))
@@ -133,10 +136,8 @@ def lista(item):
 def lista_series(item):
     logger.info()
     itemlist = list()
-
     itemlist.append(item.clone(title="Novedades", action="entradas", url="%s/series/" % host))
     itemlist.append(item.clone(title="Miniseries", action="entradas", url="%s/series/miniseries" % host))
-
     return itemlist
 
 
@@ -148,7 +149,7 @@ def entradas(item):
     data = get_data(item.url)
     bloque = scrapertools.find_single_match(data, '<div id="content" role="main">(.*?)<div id="sidebar" '
                                                   'role="complementary">')
-    contenido = ["series", "deportes", "anime", 'miniseries']
+    contenido = ["series", "deportes", "anime", 'miniseries', 'programas']
     c_match = [True for match in contenido if match in item.url]
     # Patron dependiendo del contenido
     if True in c_match:
@@ -164,6 +165,7 @@ def entradas(item):
             titulo = scrapedtitle + scrapedinfo
             titulo = scrapertools.decodeHtmlentities(titulo)
             scrapedtitle = scrapertools.decodeHtmlentities(scrapedtitle)
+
             scrapedthumbnail = urllib.unquote(re.sub(r'&amp;b=4|/go\.php\?u=', '', scrapedthumbnail))
             if not scrapedthumbnail.startswith("http"):
                 scrapedthumbnail = "http:" + scrapedthumbnail
@@ -201,7 +203,7 @@ def entradas(item):
 
             if info:
                 titulo += " [%s]" % unicode(info, "utf-8").capitalize().encode("utf-8")
-
+            year = scrapertools.find_single_match(titulo,'\[\d{4}\]')
             scrapedthumbnail = urllib.unquote(re.sub(r'&amp;b=4|/go\.php\?u=', '', scrapedthumbnail))
             if not scrapedthumbnail.startswith("http"):
                 scrapedthumbnail = "http:" + scrapedthumbnail
@@ -211,8 +213,8 @@ def entradas(item):
 
             itemlist.append(item.clone(action=action, title=titulo, url=scrapedurl, thumbnail=scrapedthumbnail,
                                        fulltitle=scrapedtitle, contentTitle=scrapedtitle, viewmode="movie_with_plot",
-                                       show=show, contentType="movie"))
-
+                                       show=show, contentType="movie", infoLabels={'year':year}))
+    tmdb.set_infoLabels_itemlist(itemlist, seekTmdb=True)
     # Paginación
     next_page = scrapertools.find_single_match(data, '<a class="nextpostslink".*?href="([^"]+)"')
     if next_page:

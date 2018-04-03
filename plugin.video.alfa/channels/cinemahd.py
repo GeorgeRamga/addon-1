@@ -4,6 +4,7 @@
 # -*- By the Alfa Develop Group -*-
 
 import re
+import urllib
 from channelselector import get_thumb
 from core import httptools
 from core import scrapertools
@@ -11,12 +12,22 @@ from core import servertools
 from core import tmdb
 from core.item import Item
 from platformcode import config, logger
+from channels import autoplay
+from channels import filtertools
+
 
 host = 'http://www.cinemahd.co/'
+
+IDIOMAS = {'Latino': 'LAT'}
+list_language = IDIOMAS.values()
+list_quality = []
+list_servers = ['fastplay', 'rapidvideo', 'streamplay', 'flashx', 'streamito', 'streamango', 'vidoza']
 
 
 def mainlist(item):
     logger.info()
+
+    autoplay.init(item.channel, list_servers, list_quality)
 
     itemlist = list()
     itemlist.append(item.clone(title="Ultimas", action="list_all", url=host, thumbnail=get_thumb('last', auto=True)))
@@ -30,6 +41,8 @@ def mainlist(item):
                                thumbnail=get_thumb('alphabet', auto=True)))
     itemlist.append(item.clone(title="Buscar", action="search", url=host+'?s=',
                                thumbnail=get_thumb('search', auto=True)))
+
+    autoplay.show_option(item.channel, itemlist)
 
     return itemlist
 
@@ -46,17 +59,16 @@ def list_all(item):
     itemlist = []
 
     data = get_source(item.url)
-
     if item.section == 'alpha':
         patron = '<span class=Num>\d+.*?<a href=(.*?) class.*?<img src=(.*?) alt=.*?<strong>(.*?)</strong>.*?'
-        patron += '<td>(\d{4})</td>.*?Qlty>(.*?)</span>'
+        patron += '<td>(\d{4})</td>'
     else:
         patron = '<article id=post-.*?<a href=(.*?)>.*?<img src=(.*?) alt=.*?'
-        patron += '<h2 class=Title>(.*?)<\/h2>.*?<span class=Year>(.*?)<\/span>.*?Qlty>(.*?)<\/span>'
+        patron += '<h3 class=Title>(.*?)<\/h3>.*?<span class=Year>(.*?)<\/span>'
     data = get_source(item.url)
     matches = re.compile(patron, re.DOTALL).findall(data)
 
-    for scrapedurl, scrapedthumbnail, scrapedtitle, year, quality in matches:
+    for scrapedurl, scrapedthumbnail, scrapedtitle, year in matches:
 
         url = scrapedurl
         if "|" in scrapedtitle:
@@ -67,14 +79,13 @@ def list_all(item):
 
         contentTitle = re.sub('\(.*?\)','', contentTitle)
 
-        title = '%s [%s] [%s]'%(contentTitle, year, quality)
+        title = '%s [%s]'%(contentTitle, year)
         thumbnail = 'http:'+scrapedthumbnail
         itemlist.append(item.clone(action='findvideos',
                                    title=title,
                                    url=url,
                                    thumbnail=thumbnail,
                                    contentTitle=contentTitle,
-                                   quality = quality,
                                    infoLabels={'year':year}
                                    ))
     tmdb.set_infoLabels_itemlist(itemlist, True)
@@ -120,28 +131,43 @@ def findvideos(item):
 
     itemlist = []
     data = get_source(item.url)
+    data = scrapertools.decodeHtmlentities(data)
 
     patron = 'id=(Opt\d+)>.*?src=(.*?) frameborder.*?</iframe>'
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for option, scrapedurl in matches:
-
-        url= scrapedurl
-        opt_data = scrapertools.find_single_match(data,'%s><span>.*?<strong>\d+<.*?</span>.*?<span>('
-                                                       '.*?)</span>'%option).split('-')
-
+        scrapedurl = scrapedurl.replace('"','').replace('&#038;','&')
+        data_video = get_source(scrapedurl)
+        url = scrapertools.find_single_match(data_video, '<div class=Video>.*?src=(.*?) frameborder')
+        opt_data = scrapertools.find_single_match(data,'%s><span>.*?</span>.*?<span>(.*?)</span>'%option).split('-')
         language = opt_data[0].strip()
         quality = opt_data[1].strip()
-
-        if url != '':
-            itemlist.append(item.clone(title='%s', url=url, language=language, quality=quality, action='play'))
+        if url != '' and 'youtube' not in url:
+            itemlist.append(item.clone(title='%s', url=url, language=IDIOMAS[language], quality=quality, action='play'))
+        elif 'youtube' in url:
+            trailer = item.clone(title='Trailer', url=url, action='play', server='youtube')
 
     itemlist = servertools.get_servers_itemlist(itemlist, lambda i: i.title % '%s [%s] [%s]'%(i.server.capitalize(),
                                                                                               i.language, i.quality))
+    try:
+        itemlist.append(trailer)
+    except:
+        pass
+
+    # Requerido para FilterTools
+    itemlist = filtertools.get_links(itemlist, item, list_language)
+
+    # Requerido para AutoPlay
+
+    autoplay.start(itemlist, item)
+
     if config.get_videolibrary_support() and len(itemlist) > 0 and item.extra != 'findvideos':
         itemlist.append(
             Item(channel=item.channel, title='[COLOR yellow]Añadir esta pelicula a la videoteca[/COLOR]', url=item.url,
                  action="add_pelicula_to_library", extra="findvideos", contentTitle=item.contentTitle))
+
+
     return itemlist
 
 
