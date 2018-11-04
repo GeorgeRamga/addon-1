@@ -6,6 +6,10 @@
       {
         "pattern": "https://estream.to/embed-([a-z0-9]+).html",
         "url": "https://estream.to/\\1.html"
+      },
+      {
+        "pattern": "https://estream.xyz/embed-([a-z0-9]+).html",
+        "url": "https://estream.to/\\1.html"
       }
     ]
   },
@@ -17,7 +21,7 @@
       "default": false,
       "enabled": true,
       "id": "black_list",
-      "label": "Incluir en lista negra",
+      "label": "@60654",
       "type": "bool",
       "visible": true
     },
@@ -25,7 +29,7 @@
       "default": 0,
       "enabled": true,
       "id": "favorites_servers_list",
-      "label": "Incluir en lista de favoritos",
+      "label": "@60655",
       "lvalues": [
         "No",
         "1",
@@ -38,5 +42,5 @@
       "visible": false
     }
   ],
-  "thumbnail": "https://s14.postimg.org/ibd54ayf5/estream.png"
+  "thumbnail": "https://s14.postimg.cc/ibd54ayf5/estream.png"
 }

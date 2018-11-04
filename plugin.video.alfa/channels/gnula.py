@@ -8,7 +8,7 @@ from platformcode import config, logger
 from channelselector import get_thumb
 
 host = "http://gnula.nu/"
-host_search = "https://www.googleapis.com/customsearch/v1element?key=AIzaSyCVAXiUzRYsML1Pv6RwSG1gunmMikTzQqY&rsz=small&num=20&hl=es&prettyPrint=false&source=gcsc&gss=.es&sig=45e50696e04f15ce6310843f10a3a8fb&cx=014793692610101313036:vwtjajbclpq&q=%s&cse_tok=%s&googlehost=www.google.com&callback=google.search.Search.apiary10745&nocache=1519145965573&start=0"
+host_search = "https://cse.google.com/cse/element/v1?rsz=filtered_cse&num=20&hl=es&source=gcsc&gss=.es&sig=c891f6315aacc94dc79953d1f142739e&cx=014793692610101313036:vwtjajbclpq&q=%s&safe=off&cse_tok=%s&googlehost=www.google.com&callback=google.search.Search.csqr6098&nocache=1540313852177&start=0"
 item_per_page = 20
 
 
@@ -17,13 +17,13 @@ def mainlist(item):
     itemlist = []
     itemlist.append(Item(channel=item.channel, title="Estrenos", action="peliculas",
                          url= host +"peliculas-online/lista-de-peliculas-online-parte-1/", viewmode="movie",
-                         thumbnail=get_thumb('premieres', auto=True),))
+                         thumbnail=get_thumb('premieres', auto=True), first=0))
     itemlist.append(
         Item(channel=item.channel, title="Generos", action="generos", url= host + "generos/lista-de-generos/",
              thumbnail=get_thumb('genres', auto=True),))
     itemlist.append(Item(channel=item.channel, title="Recomendadas", action="peliculas",
                          url= host + "peliculas-online/lista-de-peliculas-recomendadas/", viewmode="movie",
-                         thumbnail=get_thumb('recomended', auto=True),))
+                         thumbnail=get_thumb('recomended', auto=True), first=0))
     itemlist.append(Item(channel = item.channel, action = ""))
     itemlist.append(
         Item(channel=item.channel, title="Buscar", action="search", url = host_search,
@@ -35,14 +35,9 @@ def search(item, texto):
     logger.info()
     texto = texto.replace(" ", "+")
     data = httptools.downloadpage(host).data
-    url_cse = scrapertools.find_single_match(data, '<form action="([^"]+)"') + "?"
-    bloque = scrapertools.find_single_match(data, '<form action=.*?</form>').replace('name="q"', "")
-    matches = scrapertools.find_multiple_matches(bloque, 'name="([^"]+).*?value="([^"]+)')
-    post = "q=" + texto + "&"
-    for name, value in matches:
-        post += name + "=" + value + "&"
-    data = httptools.downloadpage(url_cse + post).data
-    cse_token = scrapertools.find_single_match(data, "var cse_token='([^']+)'")
+    cxv = scrapertools.find_single_match(data, 'cx" value="([^"]+)"')
+    data = httptools.downloadpage("https://cse.google.es/cse.js?hpg=1&cx=%s" %cxv).data
+    cse_token = scrapertools.find_single_match(data, 'cse_token": "([^"]+)"')
     item.url = host_search %(texto, cse_token)
     try:
         return sub_search(item)
@@ -63,9 +58,9 @@ def sub_search(item):
             break
         page = int(scrapertools.find_single_match(item.url, ".*?start=(\d+)")) + item_per_page
         item.url = scrapertools.find_single_match(item.url, "(.*?start=)") + str(page)
-        patron =  '(?s)clicktrackUrl":".*?q=(.*?)".*?'
-        patron += 'title":"([^"]+)".*?'
-        patron += 'cseImage":{"src":"([^"]+)"'
+        patron =  '(?s)clicktrackUrl":\s*".*?q=(.*?)".*?'
+        patron += 'title":\s*"([^"]+)".*?'
+        patron += '"src":\s*"([^"]+)"'
         matches = scrapertools.find_multiple_matches(data, patron)
         for scrapedurl, scrapedtitle, scrapedthumbnail in matches:
             scrapedurl = scrapertools.find_single_match(scrapedurl, ".*?online/")
@@ -99,7 +94,8 @@ def generos(item):
                              action = 'peliculas',
                              title = title,
                              url = url,
-                             viewmode = "movie"))
+                             viewmode = "movie",
+                             first=0))
     itemlist = sorted(itemlist, key=lambda item: item.title)
     return itemlist
 
@@ -107,11 +103,18 @@ def generos(item):
 def peliculas(item):
     logger.info()
     itemlist = []
+    next = True
     data = httptools.downloadpage(item.url).data
     patron  = '<a class="Ntooltip" href="([^"]+)">([^<]+)<span><br[^<]+'
     patron += '<img src="([^"]+)"></span></a>(.*?)<br'
     matches = scrapertools.find_multiple_matches(data, patron)
-    for scrapedurl, scrapedtitle, scrapedthumbnail, resto in matches:
+    first = item.first
+    last = first + 19
+    if last > len(matches):
+        last = len(matches)
+        next = False
+
+    for scrapedurl, scrapedtitle, scrapedthumbnail, resto in matches[first:last]:
         language = []
         plot = scrapertools.htmlclean(resto).strip()
         languages = scrapertools.find_multiple_matches(plot, r'\((V.)\)')
@@ -132,6 +135,13 @@ def peliculas(item):
                              language=language,
                              quality=quality
                              ))
+    #paginacion
+
+    url_next_page = item.url
+    first = last
+    if next:
+        itemlist.append(item.clone(title="Siguiente >>", url=url_next_page, action='peliculas', first=first))
+
     return itemlist
 
 
@@ -149,7 +159,7 @@ def findvideos(item):
     cuenta = 0
     for datos in bloque:
         cuenta = cuenta + 1
-        patron = '<em>(opción %s.*?)</em>' %cuenta
+        patron = '<em>((?:opciÃ³n|opción) %s.*?)</em>' %cuenta
         scrapedopcion = scrapertools.find_single_match(data, patron)
         titulo_opcion = "(" + scrapertools.find_single_match(scrapedopcion, "op.*?, (.*)").upper() + ")"
         if "TRAILER" in titulo_opcion or titulo_opcion == "()":

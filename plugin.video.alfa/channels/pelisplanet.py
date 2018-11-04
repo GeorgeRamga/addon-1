@@ -57,15 +57,15 @@ def mainlist(item):
                                viewcontent='movies', thumbnail=thumbnail % 'generos',
                                viewmode="movie_with_plot", url=host + 'generos/'))
 
-    itemlist.append(Item(channel=item.channel, title="Filtrar por Idiomas",
+    itemlist.append(Item(channel=item.channel, title="[COLOR yellow][Filtrar por Idiomas][/COLOR]",
                          fanart=fanart_host, folder=False, text_color=color3,
                          text_blod=True, thumbnail=thumbnail % 'idiomas'))
 
-    itemlist.append(item.clone(title="Castellano", action="peliculas", text_blod=True,
+    itemlist.append(item.clone(title="    Castellano", action="peliculas", text_blod=True,
                                viewcontent='movies', thumbnail=thumbnail % 'castellano',
                                viewmode="movie_with_plot", url=host + 'idioma/castellano/'))
 
-    itemlist.append(item.clone(title="Latino", action="peliculas", text_blod=True,
+    itemlist.append(item.clone(title="    Latino", action="peliculas", text_blod=True,
                                viewcontent='movies', thumbnail=thumbnail % 'latino',
                                viewmode="movie_with_plot", url=host + 'idioma/latino/'))
 
@@ -173,10 +173,10 @@ def peliculas(item):
     data = re.sub(r"\n|\r|\t|\(.*?\)|\s{2}|&nbsp;", "", data)
     patron_todas = '<div class="home-movies">(.*?)<footer>'
     data = scrapertools.find_single_match(data, patron_todas)
-    patron = 'col-sm-5"><a href="([^"]+)".+?'
-    patron += 'browse-movie-link-qd.*?>([^>]+)</.+?'
-    patron += '<p>([^>]+)</p>.+?'
-    patron += 'title one-line">([^>]+)</h2>.+?'
+    patron = 'col-sm-5".*?href="([^"]+)".+?'
+    patron += 'browse-movie-link-qd.*?>([^<]+)</.+?'
+    patron += '<p>([^<]+)</p>.+?'
+    patron += 'title one-line">([^<]+)</h2>.+?'
     patron += 'img-responsive" src="([^"]+)".*?'
 
     matches = re.compile(patron, re.DOTALL).findall(data)
@@ -184,41 +184,18 @@ def peliculas(item):
     for scrapedurl, quality, year, scrapedtitle, scrapedthumbnail in matches:
         if '/ ' in scrapedtitle:
             scrapedtitle = scrapedtitle.partition('/ ')[2]
-        title = scrapedtitle
-        contentTitle = title
-        url = scrapedurl
-        quality = quality
-        thumbnail = scrapedthumbnail
 
         itemlist.append(Item(channel=item.channel,
                              action="findvideos",
-                             title=title, url=url,
+                             title=scrapedtitle,
+                             url=scrapedurl,
                              quality=quality,
-                             thumbnail=thumbnail,
-                             contentTitle=contentTitle,
+                             thumbnail=scrapedthumbnail,
+                             contentTitle=scrapedtitle,
                              infoLabels={"year": year},
                              text_color=color3
                              ))
 
-    # for scrapedurl, calidad, year, scrapedtitle, scrapedthumbnail in matches:
-    #     datas = httptools.downloadpage(scrapedurl).data
-    #     datas = re.sub(r"\n|\r|\t|\s{2}|&nbsp;", "", datas)
-    #     # logger.info(datas)
-    #     if '/ ' in scrapedtitle:
-    #         scrapedtitle = scrapedtitle.partition('/ ')[2]
-    #     contentTitle = scrapertools.find_single_match(datas, '<em class="pull-left">Titulo original: </em>([^<]+)</p>')
-    #     contentTitle = scrapertools.decodeHtmlentities(contentTitle.strip())
-    #     rating = scrapertools.find_single_match(datas, 'alt="Puntaje MPA IMDb" /></a><span>([^<]+)</span>')
-    #     director = scrapertools.find_single_match(
-    #         datas, '<div class="list-cast-info tableCell"><a href="[^"]+" rel="tag">([^<]+)</a></div>')
-    #     title = "%s [COLOR yellow][%s][/COLOR]" % (scrapedtitle.strip(), calidad.upper())
-    #
-    #     logger.debug('thumbnail: %s' % scrapedthumbnail)
-    #     new_item = Item(channel=item.channel, action="findvideos", title=title, plot='', contentType='movie',
-    #                     url=scrapedurl, contentQuality=calidad, thumbnail=scrapedthumbnail,
-    #                     contentTitle=contentTitle, infoLabels={"year": year, 'rating': rating, 'director': director},
-    #                     text_color=color3)
-    #     itemlist.append(new_item)
     tmdb.set_infoLabels_itemlist(itemlist, __modo_grafico__)
 
     paginacion = scrapertools.find_single_match(data, '<a class="nextpostslink" rel="next" href="([^"]+)">')
@@ -288,7 +265,7 @@ def findvideos(item):
 
                 itemlist.sort(key=lambda it: it.title, reverse=True)
 
-        if 'drive' not in servidores and 'streamvips' not in servidores and 'mediastream' not in servidores:
+        if 'drive' not in servidores and 'streamvips' not in servidores and 'mediastream' not in servidores and 'megavips' not in servidores:
             if 'ultrastream' not in servidores:
                 server = servertools.get_server_from_url(scrapedurl)
                 quality = scrapertools.find_single_match(

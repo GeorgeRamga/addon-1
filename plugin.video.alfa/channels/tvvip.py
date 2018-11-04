@@ -3,7 +3,6 @@
 import os
 import re
 import sys
-import unicodedata
 import urllib
 import time
 
@@ -15,9 +14,9 @@ from core import servertools
 from core import tmdb
 from core.item import Item
 from platformcode import config, logger
-from platformcode import platformtools
 
 host = "http://tv-vip.com"
+
 
 def mainlist(item):
     logger.info()
@@ -511,13 +510,13 @@ def series_library(item):
     # Funcion unicamente para añadir/actualizar series a la libreria
     lista_episodios = []
     show = item.show.strip()
-    data_serie = anti_cloudflare(item.url, host=host, headers=headers)
+    data_serie = httptools.downloadpage(item.url).data
     data_serie = jsontools.load(data_serie)
     # Para series que en la web se listan divididas por temporadas
     if data_serie["sortedPlaylistChilds"]:
         for season_name in data_serie["sortedPlaylistChilds"]:
             url_season = host + "/json/playlist/%s/index.json" % season_name['id']
-            data = anti_cloudflare(url_season, host=host, headers=headers)
+            data = httptools.downloadpage(url_season).data
             data = jsontools.load(data)
             if data["sortedRepoChilds"]:
                 for child in data["sortedRepoChilds"]:
@@ -609,12 +608,22 @@ def play(item):
     logger.info()
     itemlist = []
     uri = scrapertools.find_single_match(item.url, '(/transcoder[\w\W]+)')
-    uri_request = host + "/video-prod/s/uri?uri=%s&_=%s" % (uri, int(time.time()))
+    s = scrapertools.find_single_match(item.url, r'http.*?://(.*?)\.')
+    uri_request = host + "/video2-prod/s/uri?uri=%s&s=%s&_=%s" % (uri, s, int(time.time()))
     data = httptools.downloadpage(uri_request).data
     data = jsontools.load(data)
-    url = item.url.replace(".tv-vip.com/transcoder/", ".tv-vip.info/c/transcoder/") + "?tt=" + str(data['tt']) + \
-          "&mm=" + data['mm'] + "&bb=" + data['bb']
+    if data['s'] == None:
+        data['s'] = ''
+    # url = item.url.replace(".tv-vip.com/transcoder/", ".%s/e/transcoder/") % (data['b']) + "?tt=" + str(data['a']['tt']) + \
+    #       "&mm=" + data['a']['mm'] + "&bb=" + data['a']['bb']
+    url = item.url.replace(".tv-vip.com/transcoder/", ".pelisipad.com/s/transcoder/") + "?tt=" + str(
+        data['a']['tt']) + \
+          "&mm=" + data['a']['mm'] + "&bb=" + data['a']['bb']
+
+    url += "|User-Agent=%s" % httptools.get_user_agent
+
     itemlist.append(item.clone(action="play", server="directo", url=url, folder=False))
+
     return itemlist
 
 
@@ -622,7 +631,7 @@ def listas(item):
     logger.info()
     # Para añadir listas a la videoteca en carpeta CINE
     itemlist = []
-    data = anti_cloudflare(item.url, host=host, headers=headers)
+    data = httptools.downloadpage(item.url).data
     data = jsontools.load(data)
     head = header_string + get_cookie_value()
     for child in data["sortedRepoChilds"]:

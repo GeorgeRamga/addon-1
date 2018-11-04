@@ -15,6 +15,27 @@ __settings__ = xbmcaddon.Addon(id="plugin.video." + PLUGIN_NAME)
 __language__ = __settings__.getLocalizedString
 
 
+def get_addon_version(with_fix=True):
+    '''
+    Devuelve el número de versión del addon, y opcionalmente número de fix si lo hay
+    '''
+    if with_fix:
+        return __settings__.getAddonInfo('version') + get_addon_version_fix()
+    else:
+        return __settings__.getAddonInfo('version')
+
+def get_addon_version_fix():
+    try:
+        last_fix_json = os.path.join(get_runtime_path(), 'last_fix.json')   # información de la versión fixeada del usuario
+        if os.path.exists(last_fix_json):
+            with open(last_fix_json, 'r') as f: data=f.read(); f.close()
+            fix = re.findall('"fix_version"\s*:\s*(\d+)', data)
+            if fix:
+                return '.fix%s' % fix[0]
+    except:
+        pass
+    return ''
+
 def get_platform(full_version=False):
     """
         Devuelve la información la version de xbmc o kodi sobre el que se ejecuta el plugin
@@ -113,13 +134,13 @@ def open_settings():
                 if settings_post['adult_aux_new_password1'] == settings_post['adult_aux_new_password2']:
                     set_setting('adult_password', settings_post['adult_aux_new_password1'])
                 else:
-                    platformtools.dialog_ok("Canales para adultos",
-                                            "Los campos 'Nueva contraseña' y 'Confirmar nueva contraseña' no coinciden."
-                                            , "Entre de nuevo en 'Preferencias' para cambiar la contraseña")
+                    platformtools.dialog_ok(get_localized_string(60305),
+                                            get_localized_string(60306),
+                                            get_localized_string(60307))
 
         else:
-            platformtools.dialog_ok("Canales para adultos", "La contraseña no es correcta.",
-                                    "Los cambios realizados en esta sección no se guardaran.")
+            platformtools.dialog_ok(get_localized_string(60305), get_localized_string(60309),
+                                    get_localized_string(60310))
 
             # Deshacer cambios
             set_setting("adult_mode", settings_pre.get("adult_mode", 0))
@@ -174,23 +195,23 @@ def get_setting(name, channel="", server="", default=None):
 
     # Specific channel setting
     if channel:
-        # logger.info("config.get_setting reading channel setting '"+name+"' from channel json")
+        # logger.info("get_setting reading channel setting '"+name+"' from channel json")
         from core import channeltools
         value = channeltools.get_channel_setting(name, channel, default)
-        # logger.info("config.get_setting -> '"+repr(value)+"'")
+        # logger.info("get_setting -> '"+repr(value)+"'")
         return value
 
     # Specific server setting
     elif server:
-        # logger.info("config.get_setting reading server setting '"+name+"' from server json")
+        # logger.info("get_setting reading server setting '"+name+"' from server json")
         from core import servertools
         value = servertools.get_server_setting(name, server, default)
-        # logger.info("config.get_setting -> '"+repr(value)+"'")
+        # logger.info("get_setting -> '"+repr(value)+"'")
         return value
 
     # Global setting
     else:
-        # logger.info("config.get_setting reading main setting '"+name+"'")
+        # logger.info("get_setting reading main setting '"+name+"'")
         value = __settings__.getSetting(name)
         if not value:
             return default
@@ -277,6 +298,14 @@ def get_localized_string(code):
 
     return dev
 
+def get_localized_category(categ):
+    categories = {'movie': get_localized_string(30122), 'tvshow': get_localized_string(30123),
+                  'anime': get_localized_string(30124), 'documentary': get_localized_string(30125),
+                  'vos': get_localized_string(30136), 'adult': get_localized_string(30126),
+                  'direct': get_localized_string(30137), 'torrent': get_localized_string(70015)}
+    return categories[categ] if categ in categories else categ
+
+
 
 def get_videolibrary_config_path():
     value = get_setting("videolibrarypath")
@@ -352,7 +381,6 @@ def verify_directories_created():
     config_paths = [["folder_movies", "CINE"],
                     ["folder_tvshows", "SERIES"]]
 
-    flag_call = True
     for path, default in config_paths:
         saved_path = get_setting(path)
 
@@ -365,17 +393,14 @@ def verify_directories_created():
             logger.debug("Creating %s: %s" % (path, content_path))
 
             # si se crea el directorio
-            if filetools.mkdir(content_path):
-                if flag_call:
-                    # le pasamos el valor para que sepamos que se ha pasado por creación de directorio
-                    xbmc_videolibrary.ask_set_content(1)
-                    flag_call = False
+            filetools.mkdir(content_path)
 
     try:
         from core import scrapertools
         # Buscamos el archivo addon.xml del skin activo
         skindir = filetools.join(xbmc.translatePath("special://home"), 'addons', xbmc.getSkinDir(),
                                  'addon.xml')
+        if not os.path.isdir(skindir): return # No hace falta mostrar error en el log si no existe la carpeta
         # Extraemos el nombre de la carpeta de resolución por defecto
         folder = ""
         data = filetools.read(skindir)

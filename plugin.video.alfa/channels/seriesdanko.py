@@ -16,14 +16,14 @@ HOST = 'http://seriesdanko.to/'
 IDIOMAS = {'es': 'Español', 'la': 'Latino', 'vos': 'VOS', 'vo': 'VO'}
 list_idiomas = IDIOMAS.values()
 list_servers = ['streamcloud', 'powvideo', 'gamovideo', 'streamplay', 'openload', 'flashx', 'nowvideo', 'thevideo']
-CALIDADES = ['SD', 'MicroHD', 'HD/MKV']
+list_quality = ['SD', 'MicroHD', 'HD/MKV']
 
 
 
 def mainlist(item):
     logger.info()
 
-    autoplay.init(item.channel, list_servers, CALIDADES)
+    autoplay.init(item.channel, list_servers, list_quality)
     itemlist = list()
 
     itemlist.append(Item(channel=item.channel, title="Novedades", action="novedades", url=HOST))
@@ -33,12 +33,20 @@ def mainlist(item):
     itemlist.append(Item(channel=item.channel, title="Buscar...", action="search",
                          url=urlparse.urljoin(HOST, "all.php")))
 
-    #itemlist = filtertools.show_option(itemlist, item.channel, list_idiomas, CALIDADES)
+    itemlist = filtertools.show_option(itemlist, item.channel, list_idiomas, list_quality)
 
     autoplay.show_option(item.channel, itemlist)
 
     return itemlist
 
+def newest(categoria):
+    logger.info("categoria: %s" % categoria)
+    itemlist = []
+
+    if categoria == 'series':
+        itemlist = novedades(Item(url = HOST))
+
+    return itemlist
 
 def novedades(item):
     logger.info()
@@ -48,27 +56,25 @@ def novedades(item):
     data = httptools.downloadpage(item.url).data
     data = re.sub(r"\n|\r|\t|\s{2}|&nbsp;|<Br>|<BR>|<br>|<br/>|<br />|-\s", "", data)
     data = re.sub(r"<!--.*?-->", "", data)
-    patron = '<a title="([^"]+)" href="([^"]+)".*?>'
-    patron += "<img.*?src='([^']+)'"
+    data = scrapertools.find_single_match(data, "<div class='main section' id='main'>(.*?)</ul>")
+    patron = "<div class='post-header'>(.*?)</span>"
     matches = re.compile(patron, re.DOTALL).findall(data)
 
-    for scrapedtitle, scrapedurl, scrapedthumb in matches:
-        # patron = "^(.*?)(?:Ya Disponible|Disponible|Disponbile|disponible|\(Actualizada\))$"
-        # match = re.compile(patron, re.DOTALL).findall(scrapedtitle)
+    for serie_data in matches:
+        scrapedtitle = scrapertools.find_single_match(serie_data, "title='([^']+)'")
+        scrapedurl = scrapertools.find_single_match(serie_data, 'href="([^"]+)"')
+        scrapedthumb = scrapertools.find_single_match(serie_data, "src='([^']+)'")
         title = scrapertools.decodeHtmlentities(scrapedtitle)
         language=''
-        # language = scrapertools.find_multiple_matches(title,'(Vose|Español|Latino)')
-        # for lang in language:
-        #     title = title.replace(lang,'')
-        # title = title.replace ('Disponible','')
-        # title = title.replace('Ya', '')
-        # title = title.strip()
+        title = title.replace ('Disponible','')
+        title = title.replace('Ya', '')
+        title = title.strip()
 
         show = scrapertools.find_single_match(title, "^(.+?) \d+[x|X]\d+")
 
         itemlist.append(Item(channel=item.channel, title=title, url=urlparse.urljoin(HOST, scrapedurl), show=show,
                              action="episodios", thumbnail=scrapedthumb,
-                             context=filtertools.context(item, list_idiomas, CALIDADES), language=language))
+                             context=filtertools.context(item, list_idiomas, list_quality), language=language))
 
     return itemlist
 
@@ -116,7 +122,7 @@ def series_seccion(item):
     for scrapedurl, scrapedtitle in matches[item.first:limit]:
         itemlist.append(Item(channel=item.channel, action="episodios", title=scrapedtitle, show=scrapedtitle,
                              url=urlparse.urljoin(HOST, scrapedurl),
-                             context=filtertools.context(item, list_idiomas, CALIDADES)))
+                             context=filtertools.context(item, list_idiomas, list_quality)))
 
     tmdb.set_infoLabels_itemlist(itemlist, seekTmdb=True)
     #pagination
@@ -149,7 +155,7 @@ def series_por_letra(item):
     itemlist = []
     for url, title, img in shows:
         itemlist.append(item.clone(title=title, url=urlparse.urljoin(HOST, url), action="episodios", thumbnail=img,
-                                   show=title, context=filtertools.context(item, list_idiomas, CALIDADES)))
+                                   show=title, context=filtertools.context(item, list_idiomas, list_quality)))
     return itemlist
 
 
@@ -164,7 +170,7 @@ def search(item, texto):
                            data, re.IGNORECASE)
         for url, title in shows:
             itemlist.append(item.clone(title=title, url=urlparse.urljoin(HOST, url), action="episodios", show=title,
-                                       context=filtertools.context(item, list_idiomas, CALIDADES)))
+                                       context=filtertools.context(item, list_idiomas, list_quality)))
 
         tmdb.set_infoLabels_itemlist(itemlist, seekTmdb=True)
     # Se captura la excepción, para no interrumpir al buscador global si un canal falla
@@ -220,7 +226,7 @@ def episodios(item):
                              infoLabels=infoLabels))
 
 
-    #itemlist = filtertools.get_links(itemlist, item, list_idiomas, CALIDADES)
+    itemlist = filtertools.get_links(itemlist, item, list_idiomas, list_quality)
     tmdb.set_infoLabels_itemlist(itemlist, seekTmdb=True)
 
     # Opción "Añadir esta serie a la videoteca de XBMC"
@@ -241,14 +247,24 @@ def findvideos(item):
     online = re.findall('<table class=.+? cellpadding=.+? cellspacing=.+?>(.+?)</table>', data,
                         re.MULTILINE | re.DOTALL)
 
-    itemlist = parse_videos(item, "Ver", online[0])
-    itemlist.extend(parse_videos(item, "Descargar", online[1]))
+    itemlist = []
 
-    itemlist = filtertools.get_links(itemlist, item, list_idiomas, CALIDADES)
+    try:
+        filtro_enlaces = config.get_setting("filterlinks", item.channel)
+    except:
+        filtro_enlaces = 2
+
+
+    if filtro_enlaces != 0:
+        itemlist.extend(parse_videos(item, "Ver", online[0]))
+
+    if filtro_enlaces != 1:
+        itemlist.extend(parse_videos(item, "Descargar", online[1]))
+
 
     # Requerido para FilterTools
 
-    itemlist = filtertools.get_links(itemlist, item, list_idiomas)
+    itemlist = filtertools.get_links(itemlist, item, list_idiomas, list_quality)
 
     # Requerido para AutoPlay
 

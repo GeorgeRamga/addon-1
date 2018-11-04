@@ -6,6 +6,10 @@
       {
         "pattern": "streamango.com/(?:embed|f)/([A-z0-9]+)",
         "url": "http://streamango.com/embed/\\1"
+      },
+      {
+        "pattern": "https://fruitadblock.net/embed/([A-z0-9]+)",
+        "url": "http://streamango.com/embed/\\1"
       }
     ]
   },
@@ -17,7 +21,7 @@
       "default": false,
       "enabled": true,
       "id": "black_list",
-      "label": "Incluir en lista negra",
+      "label": "@60654",
       "type": "bool",
       "visible": true
     },
@@ -25,7 +29,7 @@
       "default": 0,
       "enabled": true,
       "id": "favorites_servers_list",
-      "label": "Incluir en lista de favoritos",
+      "label": "@60655",
       "lvalues": [
         "No",
         "1",
