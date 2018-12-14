@@ -99,7 +99,7 @@ load_cookies()
 
 
 def downloadpage(url, post=None, headers=None, timeout=None, follow_redirects=True, cookies=True, replace_headers=False,
-                 add_referer=False, only_headers=False, bypass_cloudflare=True, count_retries=0, random_headers=False):
+                 add_referer=False, only_headers=False, bypass_cloudflare=True, count_retries=0, random_headers=False, ignore_response_code=False):
     """
     Abre una url y retorna los datos obtenidos
 
@@ -124,6 +124,8 @@ def downloadpage(url, post=None, headers=None, timeout=None, follow_redirects=Tr
     @type only_headers: bool
     @param random_headers: Si True, utiliza el método de seleccionar headers aleatorios.
     @type random_headers: bool
+    @param ignore_response_code: Si es True, ignora el método para WebErrorException para error como el error 404 en veseriesonline, pero es un data funcional
+    @type ignore_response_code: bool
     @return: Resultado de la petición
     @rtype: HTTPResponse
 
@@ -256,7 +258,7 @@ def downloadpage(url, post=None, headers=None, timeout=None, follow_redirects=Tr
     # error 4xx o 5xx se lanza excepcion (menos para servidores)
     # response["code"] = 400  # linea de código para probar
     is_channel = str(is_channel).replace("/servers/","\\servers\\")  # Para sistemas operativos diferente a Windows la ruta cambia
-    if type(response["code"]) ==  int and "\\servers\\" not in str(is_channel):
+    if type(response["code"]) ==  int and "\\servers\\" not in str(is_channel) and not ignore_response_code:
         if response["code"] > 399 and (server_cloudflare == "cloudflare" and response["code"] != 503):
             raise WebErrorException(urlparse.urlparse(url)[1])
 
@@ -267,11 +269,19 @@ def downloadpage(url, post=None, headers=None, timeout=None, follow_redirects=Tr
 
     if response["headers"].get('content-encoding') == 'gzip':
         logger.info("Descomprimiendo...")
+        data_alt = response["data"]
         try:
             response["data"] = gzip.GzipFile(fileobj=StringIO(response["data"])).read()
             logger.info("Descomprimido")
         except:
-            logger.info("No se ha podido descomprimir")
+            logger.info("No se ha podido descomprimir con gzip.  Intentando con zlib")
+            response["data"] = data_alt
+            try:
+                import zlib
+                response["data"] = zlib.decompressobj(16 + zlib.MAX_WBITS).decompress(response["data"])
+            except:
+                logger.info("No se ha podido descomprimir con zlib")
+                response["data"] = data_alt
 
     # Anti Cloudflare
     if bypass_cloudflare and count_retries < 5:
