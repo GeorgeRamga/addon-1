@@ -160,17 +160,16 @@ def findvideos(item):
     logger.info()
     itemlist = []
     data = httptools.downloadpage(item.url).data
-    patron  = 'data-type="(tv).*?'
-    patron += 'data-post="([^"]+).*?'
-    patron += 'data-nume="([^"]+).*?'
-    patron += 'server">([^<]+).*?'
+    patron  = 'player-option-\d+.*?'
+    patron += 'data-sv="([^"]+).*?'
+    patron += 'data-user="([^"]+)'
     matches = scrapertools.find_multiple_matches(data, patron)
     headers = {"X-Requested-With":"XMLHttpRequest"}
-    for scrapedtype, scrapedpost, scrapednume, scrapedserver in matches:
-        post = "action=doo_player_ajax&type=%s&post=%s&nume=%s" %(scrapedtype, scrapedpost, scrapednume)
-        data1 = httptools.downloadpage(host + "wp-admin/admin-ajax.php", headers=headers, post=post).data
-        url1 = scrapertools.find_single_match(data1, "src='([^']+)")
-        url1 = devuelve_enlace(url1)
+    for scrapedserver, scrapeduser in matches:
+        data1 = httptools.downloadpage("https://space.danimados.space/gilberto.php?id=%s&sv=mp4" %scrapeduser).data
+        data1 = re.sub(r"\n|\r|\t|\s{2}|&nbsp;", "", data1)
+        url = base64.b64decode(scrapertools.find_single_match(data1, '<iframe data-source="([^"]+)"'))
+        url1 = devuelve_enlace(url)
         if "drive.google" in url1:
             url1 = url1.replace("view","preview")
         if url1:
@@ -192,11 +191,11 @@ def play(item):
 
 def devuelve_enlace(url1):
     if 'danimados' in url1:
-        url = 'https:'+url1.replace('stream/', 'stream_iframe/')
-        id = scrapertools.find_single_match(url, 'iframe/(.*)')
-        url = url.replace(id, base64.b64encode(id))
+        url = 'https:' + url1
         new_data = httptools.downloadpage(url).data
         new_data = new_data.replace('"',"'")
+        url1 = scrapertools.find_single_match(new_data, "iframe src='([^']+)")
+        new_data = httptools.downloadpage(url1).data
         url = scrapertools.find_single_match(new_data, "sources:\s*\[\{file:\s*'([^']+)")
         if "zkstream" in url or "cloudup" in url:
             url1 = httptools.downloadpage(url, follow_redirects=False, only_headers=True).headers.get("location", "")

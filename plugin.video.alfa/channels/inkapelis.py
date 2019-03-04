@@ -53,7 +53,7 @@ def mainlist(item):
 
     itemlist.append(Item(channel=item.channel, title="Géneros", action="generos", url="http://www.inkapelis.com/", text_color=color1,
                                thumbnail=get_thumb('genres', auto=True),))
-    itemlist.append(Item(channel=item.channel, title="Buscar...", action="", text_color=color1))
+    itemlist.append(Item(channel=item.channel, title="Buscar...", action="search", url="http://www.inkapelis.com/?s=", text_color=color1))
     itemlist.append(Item(channel=item.channel, action="", title=""))
     itemlist.append(
         Item(channel=item.channel, action="filtro", title="Filtrar películas", url="http://www.inkapelis.com/?s=", text_color=color1))
@@ -292,7 +292,8 @@ def entradas(item):
     else:
         # Extrae las entradas
         if item.extra == "Novedades":
-            data2 = data.split("<h3>Últimas Películas Agregadas</h3>", 1)[1]
+            data2 = data.split("<h3>Últimas Películas Agregadas y Actualizadas</h3>", 1)[1]
+
             entradas = scrapertools.find_multiple_matches(data2, '<div class="col-mt-5 postsh">(.*?)</div></div></div>')
         else:
             entradas = scrapertools.find_multiple_matches(data, '<div class="col-mt-5 postsh">(.*?)</div></div></div>')

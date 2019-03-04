@@ -3,8 +3,6 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
-import urllib
-
 from channelselector import get_thumb
 from channels import autoplay
 from channels import filtertools
@@ -27,7 +25,7 @@ list_servers = ['rapidvideo', 'streamango', 'fastplay', 'openload', 'netu', 'vid
 
 __channel__='repelis'
 
-host = "https://repelisgo.io"
+host = "https://repelisgo.com"
 
 try:
     __modo_grafico__ = config.get_setting('modo_grafico', __channel__)
@@ -188,6 +186,7 @@ def findvideos(item):
     for datos in dict:
         url1 = datos["url"]
         hostname = scrapertools.find_single_match(datos["hostname"].replace("www.",""), "(.*?)\.")
+        if "repelisgo" in hostname or "repelis.io" in datos["hostname"]: continue
         if hostname == "my": hostname = "mailru"
         titulo = "Ver en: " + hostname.capitalize() + " (" + cali[datos["quality"]] + ") (" + idio[datos["audio"]] + ")"
         itemlist.append(
@@ -208,26 +207,24 @@ def findvideos(item):
 
     autoplay.start(itemlist, item)
 
-    if itemlist:
+    if itemlist and item.contentChannel != "videolibrary":
         itemlist.append(Item(channel = item.channel))
         itemlist.append(item.clone(channel="trailertools", title="Buscar Tráiler", action="buscartrailer", context="",
                                    text_color="magenta"))
         # Opción "Añadir esta película a la biblioteca de KODI"
-        if item.extra != "library":
-            if config.get_videolibrary_support():
-                itemlist.append(Item(channel=item.channel, title="Añadir a la videoteca", text_color="green",
-                                     action="add_pelicula_to_library", url=item.url, thumbnail = item.thumbnail,
-                                     contentTitle = item.contentTitle
-                                     ))
+        if config.get_videolibrary_support():
+            itemlist.append(Item(channel=item.channel, title="Añadir a la videoteca", text_color="green",
+                                 action="add_pelicula_to_library", url=item.url, thumbnail = item.thumbnail,
+                                 contentTitle = item.contentTitle
+                                 ))
     return itemlist
 
 
 def play(item):
     logger.info()
     itemlist = []
+    #headers = {"}
     url1 = httptools.downloadpage(host + item.url, follow_redirects=False, only_headers=True).headers.get("location", "")
-    if "storage" in url1:
-        url1 = scrapertools.find_single_match(url1, "src=(.*mp4)").replace("%3A",":").replace("%2F","/")
     itemlist.append(item.clone(url=url1))
     itemlist = servertools.get_servers_itemlist(itemlist)
     itemlist[0].thumbnail = item.contentThumbnail

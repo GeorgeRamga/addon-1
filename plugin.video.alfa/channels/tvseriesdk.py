@@ -161,7 +161,8 @@ def findvideos(item):
                'powvideo': 'http://powvideo.net/embed-',
                'play': 'http://streamplay.to/embed-',
                'vido': 'http://vidoza.net/embed-',
-               'net': 'http://hqq.tv/player/embed_player.php?vid='
+               'net': 'http://hqq.tv/player/embed_player.php?vid=',
+               'ntu': 'http://hqq.tv/player/embed_player.php?vid='
                }
     data = get_source(item.url)
     noemitido = scrapertools.find_single_match(data, '<p><img src=(http://darkiller.com/images/subiendo.png) border=0\/><\/p>')

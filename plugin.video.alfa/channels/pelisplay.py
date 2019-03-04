@@ -173,6 +173,8 @@ def p_portipo(item):
 def peliculas(item):
     logger.info()
     itemlist = []
+    # action = ''
+    # contentType = ''
     data = httptools.downloadpage(item.url).data
     data = re.sub(r"\n|\r|\t|\s{2}|&nbsp;|<br>", "", data)
     patron = '<img class="posterentrada" src="/([^"]+)".*?'         # img
@@ -184,12 +186,22 @@ def peliculas(item):
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for scrapedthumbnail, scrapedurl, year, plot, scrapedtitle in matches:
+        if 'serie' in scrapedurl:
+            action = 'temporadas'
+            contentType = 'tvshow'
+            title = scrapedtitle + ' [COLOR blue](Serie)[/COLOR]'
+
+        else:
+            action = 'findvideos'
+            contentType = 'movie'
+            title = scrapedtitle
+
         if item.infoLabels['plot'] == '':
             item.plot = plot
 
-        itemlist.append(Item(channel=item.channel, action="findvideos", contentTitle=scrapedtitle,
+        itemlist.append(Item(channel=item.channel, action=action, contentTitle=scrapedtitle, contentType=contentType,
                              infoLabels={"year": year}, thumbnail=host + scrapedthumbnail,
-                             url=scrapedurl, title=scrapedtitle, plot=plot))
+                             url=scrapedurl, title=title, plot=plot))
 
     tmdb.set_infoLabels_itemlist(itemlist, __modo_grafico__)
 
@@ -286,7 +298,7 @@ def temporadas(item):
 
     if len(matches) > 1:
         for scrapedthumbnail, temporada, url in matches:
-            new_item = item.clone(action="episodios", season=temporada, url=url,
+            new_item = item.clone(action="episodesxseason", season=temporada, url=url,
                                   thumbnail=host + scrapedthumbnail, extra='serie')
             new_item.infoLabels['season'] = temporada
             new_item.extra = ""
@@ -308,10 +320,19 @@ def temporadas(item):
                              text_color=color1, thumbnail=get_thumb("videolibrary_tvshow.png"), fanart=fanart_host))
         return itemlist
     else:
-        return episodios(item)
+        return episodesxseason(item)
 
 
 def episodios(item):
+    logger.info()
+    itemlist = []
+    templist = temporadas(item)
+    for tempitem in templist:
+        itemlist += episodesxseason(tempitem)
+    return itemlist
+
+
+def episodesxseason(item):
     logger.info()
     itemlist = []
     from core import jsontools
@@ -334,10 +355,9 @@ def episodios(item):
 
         if 'season' in item.infoLabels and int(item.infoLabels['season']) != int(season):
             continue
-        title = "%sx%s: %s" % (season, episode.zfill(
-            2), scrapertools.unescape(scrapedname))
-        new_item = item.clone(title=title, url=scrapedurl, action="findvideos", text_color=color3, fulltitle=title,
-                              contentType="episode", extra='serie')
+        title = "%sx%s: %s" % (season, episode.zfill(2), scrapertools.unescape(scrapedname))
+        new_item = item.clone(title=title, url=scrapedurl, action="findvideos", text_color=color3,
+                              fulltitle=title, contentType="episode", extra='serie')
         if 'infoLabels' not in new_item:
             new_item.infoLabels = {}
         new_item.infoLabels['season'] = season
@@ -358,11 +378,7 @@ def episodios(item):
     itemlist.sort(key=lambda it: int(it.infoLabels['episode']),
                   reverse=config.get_setting('orden_episodios', __channel__))
     tmdb.set_infoLabels_itemlist(itemlist, __modo_grafico__)
-    # Opción "Añadir esta serie a la videoteca"
-    if config.get_videolibrary_support() and len(itemlist) > 0:
-        itemlist.append(Item(channel=__channel__, title="Añadir esta serie a la videoteca", url=item.url,
-                             action="add_serie_to_library", extra="episodios", show=item.show, category="Series",
-                             text_color=color1, thumbnail=get_thumb("videolibrary_tvshow.png"), fanart=fanart_host))
+
     return itemlist
 
 

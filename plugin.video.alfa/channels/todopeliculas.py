@@ -24,7 +24,7 @@ list_language = IDIOMAS.values()
 list_quality = []
 list_servers = ['torrent']
 
-host = 'http://www.todo-peliculas.com/'
+host = 'http://www.todo-peliculas.net/'
 channel = "todopeliculas"
 
 categoria = channel.capitalize()
@@ -163,7 +163,7 @@ def listado(item):
             patron = '<div class="blogitem "><a title="([^"]+)"\s+href="([^"]+)">.*?src="([^"]+)" onload'
             
         matches = re.compile(patron, re.DOTALL).findall(data)
-        if not matches and not 'Total: 0 resultados encontrados' in data:           #error
+        if not matches and not 'Total: 0 resultados encontrados' in data and not 'Total: 0 results found' in data:
             item = generictools.web_intervenida(item, data)                         #Verificamos que no haya sido clausurada
             if item.intervencion:                                                   #Sí ha sido clausurada judicialmente
                 item, itemlist = generictools.post_tmdb_episodios(item, itemlist)   #Llamamos al método para el pintado del error
@@ -274,7 +274,7 @@ def listado(item):
             
             #Limpiamos el título de la basura innecesaria
             title = re.sub(r'- $', '', title)
-            title = re.sub(r'TV|Online|Spanish|Torrent|en Espa\xc3\xb1ol|Español|Latino|Subtitulado|Blurayrip|Bluray rip|\[.*?\]|R2 Pal|\xe3\x80\x90 Descargar Torrent \xe3\x80\x91|Completa|Temporada|Descargar|Torren', '', title, flags=re.IGNORECASE)
+            title = re.sub(r'(?i)TV|Online|Spanish|Torrent|en Espa\xc3\xb1ol|Español|Latino|Subtitulado|Blurayrip|Bluray rip|\[.*?\]|R2 Pal|\xe3\x80\x90 Descargar Torrent \xe3\x80\x91|Completa|Temporada|Descargar|Torren', '', title)
 
             #Terminamos de limpiar el título
             title = re.sub(r'\??\s?\d*?\&.*', '', title)

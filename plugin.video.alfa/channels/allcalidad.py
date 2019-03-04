@@ -19,7 +19,7 @@ list_servers = ['rapidvideo', 'streamango', 'fastplay', 'flashx', 'openload', 'v
 
 __channel__='allcalidad'
 
-host = "http://allcalidad.net/"
+host = "https://allcalidad.net/"
 
 try:
     __modo_grafico__ = config.get_setting('modo_grafico', __channel__)
@@ -165,7 +165,7 @@ def findvideos(item):
             if contentTitle != "":
                 item.contentTitle = contentTitle
     bloque = scrapertools.find_single_match(data, '(?s)<div class="bottomPlayer">(.*?)<script>')
-    match = scrapertools.find_multiple_matches(bloque, '(?is)data-Url="([^"]+).*?data-postId="([^"]+)')
+    match = scrapertools.find_multiple_matches(bloque, '(?is)data-Url="([^"]+).*?data-postId="([^"]*)')
     for dataurl, datapostid in match:
         page_url = host + "wp-admin/admin-ajax.php"
         post = "action=get_more_top_news&postID=%s&dataurl=%s" %(datapostid, dataurl)
@@ -178,7 +178,7 @@ def findvideos(item):
         if "youtube" in url:
             titulo = "Ver trailer: %s"
             text_color = "yellow"
-        if "ad.js" in url or "script" in url or "jstags.js" in url:
+        if "ad.js" in url or "script" in url or "jstags.js" in url or not datapostid:
             continue
         elif "vimeo" in url:
             url += "|" + "http://www.allcalidad.com"
@@ -198,17 +198,16 @@ def findvideos(item):
 
     autoplay.start(itemlist, item)
 
-    if itemlist:
+    if itemlist and item.contentChannel != "videolibrary":
         itemlist.append(Item(channel = item.channel))
         itemlist.append(item.clone(channel="trailertools", title="Buscar Tráiler", action="buscartrailer", context="",
                                    text_color="magenta"))
         # Opción "Añadir esta película a la biblioteca de KODI"
-        if item.extra != "library":
-            if config.get_videolibrary_support():
-                itemlist.append(Item(channel=item.channel, title="Añadir a la videoteca", text_color="green",
-                                     action="add_pelicula_to_library", url=item.url, thumbnail = item.thumbnail,
-                                     contentTitle = item.contentTitle
-                                     ))
+        if config.get_videolibrary_support():
+            itemlist.append(Item(channel=item.channel, title="Añadir a la videoteca", text_color="green",
+                                 action="add_pelicula_to_library", url=item.url, thumbnail = item.thumbnail,
+                                 contentTitle = item.contentTitle
+                                 ))
     return itemlist
 
 

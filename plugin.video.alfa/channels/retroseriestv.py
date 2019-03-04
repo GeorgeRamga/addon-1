@@ -46,9 +46,12 @@ def mainlist(item):
     return itemlist
 
 
-def get_source(url):
+def get_source(url, referer=None):
     logger.info()
-    data = httptools.downloadpage(url).data
+    if referer is None:
+        data = httptools.downloadpage(url, ignore_response_code=True).data
+    else:
+        data = httptools.downloadpage(url, headers={'Referer':referer}).data
     data = re.sub(r'\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
     return data
 
@@ -138,11 +141,14 @@ def episodesxseason(item):
     data = get_source(item.url)
     infoLabels = item.infoLabels
     season = infoLabels['season']
-    patron = '<img src="([^>]+)"></a></div><div class="numerando">%s+ - (\d+)</div>' % season
+    patron = '<img src="([^>]+)"></a></div><div class="numerando">%s+ - (\d+|\d+\/\d+)</div>' % season
     patron += '<div class="episodiotitle"><a href="([^"]+)">(.*?)</a><'
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for scrapedthumbnail, scrapedepi, scrapedurl, scrapedtitle in matches:
+
+        if '/' in scrapedepi:
+            scrapedepi = scrapertools.find_single_match (scrapedepi, '(\d+)\/\d+')
 
         title = '%sx%s - %s' % (season, scrapedepi, scrapedtitle)
         infoLabels['episode'] = scrapedepi
