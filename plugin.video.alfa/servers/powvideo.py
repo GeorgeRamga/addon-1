@@ -32,14 +32,13 @@ def get_video_url(page_url, premium=False, user="", password="", video_password=
     referer = page_url.replace('iframe', 'preview')
 
     data = httptools.downloadpage(page_url, headers={'referer': referer}).data
-
     packed = scrapertools.find_single_match(data, "<script type=[\"']text/javascript[\"']>(eval.*?)</script>")
     unpacked = jsunpack.unpack(packed)
     
     url = scrapertools.find_single_match(unpacked, "(?:src):\\\\'([^\\\\]+.mp4)\\\\'")
-
     from lib import alfaresolver
-    itemlist.append([".mp4" + " [powvideo]", alfaresolver.decode_video_url(url, data)])
+    url = alfaresolver.decode_video_url(url, data)
+    itemlist.append([".mp4" + " [powvideo]", url])
 
     itemlist.sort(key=lambda x: x[0], reverse=True)
     return itemlist

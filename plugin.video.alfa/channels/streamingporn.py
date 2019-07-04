@@ -38,7 +38,7 @@ def catalogo(item):
     logger.info()
     itemlist = []
     data = httptools.downloadpage(item.url).data
-    data = scrapertools.get_match(data,'PaySites(.*?)<li id="menu-item-28040"')
+    data = scrapertools.find_single_match(data,'PaySites(.*?)<li id="menu-item-28040"')
     data = re.sub(r"\n|\r|\t|&nbsp;|<br>", "", data)
     patron  = '<li id="menu-item-\d+".*?<a href="([^"]+)">([^"]+)</a>'
     matches = re.compile(patron,re.DOTALL).findall(data)
@@ -55,7 +55,7 @@ def categorias(item):
     logger.info()
     itemlist = []
     data = httptools.downloadpage(item.url).data
-    data = scrapertools.get_match(data,'<a href="#">Categories</a>(.*?)</ul>')
+    data = scrapertools.find_single_match(data,'<a href="#">Categories</a>(.*?)</ul>')
     data = re.sub(r"\n|\r|\t|&nbsp;|<br>", "", data)
     patron  = '<li id="menu-item-\d+".*?<a href="([^"]+)">([^"]+)</a>'
     matches = re.compile(patron,re.DOTALL).findall(data)
@@ -101,11 +101,8 @@ def lista(item):
 def play(item):
     logger.info()
     data = httptools.downloadpage(item.url).data
-    itemlist = servertools.find_video_items(data=data)
-    for videoitem in itemlist:
-        videoitem.title = item.title
-        videoitem.fulltitle = item.fulltitle
-        videoitem.thumbnail = item.thumbnail
-        videoitem.channel = item.channel
+    url = scrapertools.find_single_match(data, '<a href="([^"]+)" rel="nofollow"  class="external" target="_blank">Streaming')
+    logger.debug(url)
+    itemlist = servertools.find_video_items(item.clone(url = url))
     return itemlist
 

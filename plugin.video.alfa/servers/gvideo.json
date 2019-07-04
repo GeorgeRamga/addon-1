@@ -12,11 +12,11 @@
         "url": "http://docs.google.com/get_video_info?docid=\\1"
       },
       {
-        "pattern": "https://drive.google.com/uc\\?id=([A-z0-9-_=]+)",
+        "pattern": "https://drive.google.com/(?:uc|open)\\?id=([A-z0-9-_=]+)",
         "url": "http://docs.google.com/get_video_info?docid=\\1"
       },
       {
-        "pattern": "(?s)https://(?:docs|drive).google.com/file/d/([^/]+)/(?:preview|edit)",
+        "pattern": "(?s)(?:https|http)://(?:docs|drive).google.com/file/d/([^/]+)/(?:preview|edit|view)",
         "url": "http://docs.google.com/get_video_info?docid=\\1"
       },
       {
@@ -28,6 +28,10 @@
   "free": true,
   "id": "gvideo",
   "name": "gvideo",
+  "premium": [
+    "realdebrid",
+    "alldebrid"
+  ],
   "settings": [
     {
       "default": false,

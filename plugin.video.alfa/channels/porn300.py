@@ -10,17 +10,14 @@ from core import httptools
 
 host = 'https://www.porn300.com'
 
-#BLOQUEO ANTIVIRUS STREAMCLOUD
 
 def mainlist(item):
     logger.info()
     itemlist = []
-    itemlist.append( Item(channel=item.channel, title="Nuevas" , action="lista", url=host + "/es/videos/"))
-    itemlist.append( Item(channel=item.channel, title="Mas Vistas" , action="lista", url=host + "/es/mas-vistos/"))
-    itemlist.append( Item(channel=item.channel, title="Mejor valorada" , action="lista", url=host + "/es/mas-votados/"))
-    itemlist.append( Item(channel=item.channel, title="Canal" , action="categorias", url=host + "/es/canales/?page=1"))
-    itemlist.append( Item(channel=item.channel, title="Pornstars" , action="categorias", url=host + "/es/pornostars/?page=1"))
-    itemlist.append( Item(channel=item.channel, title="Categorias" , action="categorias", url=host + "/es/categorias/"))
+    itemlist.append( Item(channel=item.channel, title="Nuevas" , action="lista", url=host + "/en_US/ajax/page/list_videos/?page=1"))
+    itemlist.append( Item(channel=item.channel, title="Canal" , action="categorias", url=host + "/channels/?page=1"))
+    itemlist.append( Item(channel=item.channel, title="Pornstars" , action="categorias", url=host + "/pornstars/?page=1"))
+    itemlist.append( Item(channel=item.channel, title="Categorias" , action="categorias", url=host + "/categories/?page=1"))
     itemlist.append( Item(channel=item.channel, title="Buscar", action="search"))
     return itemlist
 
@@ -43,20 +40,18 @@ def categorias(item):
     itemlist = []
     data = httptools.downloadpage(item.url).data
     data = re.sub(r"\n|\r|\t|&nbsp;|<br>", "", data)
-    patron  = '<a itemprop="url" href="([^"]+)".*?'
+    patron  = '<a itemprop="url" href="/([^"]+)".*?'
     patron += 'title="([^"]+)">.*?'
-    if "/pornostars/" in item.url:
-        patron += '<img itemprop="image" src=([^"]+) alt=.*?'
-        patron += '</svg>([^<]+)<'
-    else:
-        patron += '<img itemprop="image" src="([^"]+)" alt=.*?'
-        patron += '</svg>([^<]+)<'
+    patron += 'data-src="([^"]+)" alt=.*?'
+    patron += '</svg>([^<]+)<'
     matches = re.compile(patron,re.DOTALL).findall(data)
     for scrapedurl,scrapedtitle,scrapedthumbnail,cantidad in matches:
         scrapedplot = ""
         cantidad = re.compile("\s+", re.DOTALL).sub(" ", cantidad)
         scrapedtitle = scrapedtitle + " (" + cantidad +")"
-        scrapedurl = urlparse.urljoin(item.url,scrapedurl) + "/?sort=latest"
+        scrapedurl = scrapedurl.replace("channel/", "producer/")
+        scrapedurl = "/en_US/ajax/page/show_" + scrapedurl + "?page=1"
+        scrapedurl = urlparse.urljoin(item.url,scrapedurl)
         itemlist.append( Item(channel=item.channel, action="lista", title=scrapedtitle, url=scrapedurl,
                               fanart=scrapedthumbnail, thumbnail=scrapedthumbnail, plot=scrapedplot) )
     next_page = scrapertools.find_single_match(data,'<link rel="next" href="([^"]+)" />')
@@ -75,19 +70,22 @@ def lista(item):
     data = httptools.downloadpage(item.url).data
     data = re.sub(r"\n|\r|\t|&nbsp;|<br>", "", data)
     patron = '<a itemprop="url" href="([^"]+)" data-video-id="\d+" title="([^"]+)">.*?'
-    patron += '<img itemprop="thumbnailUrl" src="([^"]+)".*?'
+    patron += 'data-src="([^"]+)".*?'
     patron += '</svg>([^<]+)<'
     matches = re.compile(patron,re.DOTALL).findall(data)
-    for scrapedurl,scrapedtitle,scrapedthumbnail,cantidad  in matches:
+    for scrapedurl,scrapedtitle,scrapedthumbnail,scrapedtime  in matches:
         url = urlparse.urljoin(item.url,scrapedurl)
-        cantidad = re.compile("\s+", re.DOTALL).sub(" ", cantidad)
-        title = "[COLOR yellow]" + cantidad + "[/COLOR] " + scrapedtitle
+        scrapedtime = scrapedtime.strip()
+        title = "[COLOR yellow]" + scrapedtime + "[/COLOR] " + scrapedtitle
         contentTitle = title
         thumbnail = scrapedthumbnail
         plot = ""
         itemlist.append( Item(channel=item.channel, action="play" , title=title , url=url, thumbnail=thumbnail,
                               fanart=thumbnail, plot=plot, contentTitle = contentTitle) )
-    next_page = scrapertools.find_single_match(data,'<link rel="next" href="([^"]+)" />')
+    next_page=item.url
+    num= int(scrapertools.find_single_match(item.url,".*?/?page=(\d+)"))
+    num += 1
+    next_page = "?page=" + str(num)
     if next_page!="":
         next_page = urlparse.urljoin(item.url,next_page)
         itemlist.append(item.clone(action="lista", title="Página Siguiente >>", text_color="blue", url=next_page) )

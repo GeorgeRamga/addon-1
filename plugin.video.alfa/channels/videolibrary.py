@@ -53,6 +53,7 @@ def list_movies(item, silent=False):
                 head_nfo, new_item = videolibrarytools.read_nfo(nfo_path)
 
                 if not new_item:                        #Si no ha leído bien el .nfo, pasamos a la siguiente
+                    logger.error('.nfo erroneo en ' + str(nfo_path))
                     continue
                 
                 if len(new_item.library_urls) > 1:
@@ -180,6 +181,10 @@ def list_tvshows(item):
                     logger.error(traceback.format_exc())
                 
                 head_nfo, item_tvshow = videolibrarytools.read_nfo(tvshow_path)
+                
+                if not item_tvshow:                        #Si no ha leído bien el .nfo, pasamos a la siguiente
+                    logger.error('.nfo erroneo en ' + str(tvshow_path))
+                    continue
 
                 if len(item_tvshow.library_urls) > 1:
                     multicanal = True
@@ -468,7 +473,8 @@ def findvideos(item):
         item_json = Item().fromjson(filetools.read(json_path))
         ###### Redirección al canal NewPct1.py si es un clone, o a otro canal y url si ha intervención judicial
         try:
-            item_json, it, overwrite = generictools.redirect_clone_newpct1(item_json)
+            if item_json:
+                item_json, it, overwrite = generictools.redirect_clone_newpct1(item_json)
         except:
             logger.error(traceback.format_exc())
         item_json.contentChannel = "local"
@@ -527,7 +533,8 @@ def findvideos(item):
         item_json = Item().fromjson(filetools.read(json_path))
         ###### Redirección al canal NewPct1.py si es un clone, o a otro canal y url si ha intervención judicial
         try:
-            item_json, it, overwrite = generictools.redirect_clone_newpct1(item_json)
+            if item_json:
+                item_json, it, overwrite = generictools.redirect_clone_newpct1(item_json)
         except:
             logger.error(traceback.format_exc())
         list_servers = []
@@ -544,6 +551,8 @@ def findvideos(item):
             item_json.contentChannel = 'videolibrary'
             if hasattr(channel, 'findvideos'):
                 from core import servertools
+                if item_json.videolibray_emergency_urls:
+                    del item_json.videolibray_emergency_urls
                 list_servers = getattr(channel, 'findvideos')(item_json)
                 list_servers = servertools.filter_servers(list_servers)
             else:
@@ -727,13 +736,13 @@ def verify_playcount_series(item, path):
 
 def mark_content_as_watched2(item):
     logger.info()
-   # logger.debug("item:\n" + item.tostring('\n'))
+    # logger.debug("item:\n" + item.tostring('\n'))
 
     if filetools.exists(item.nfo):
         head_nfo, it = videolibrarytools.read_nfo(item.nfo) 
         #logger.debug(it) 
-
-        if item.contentType == 'movie':
+        name_file = ""
+        if item.contentType == 'movie' or item.contentType == 'tvshow':
             name_file = os.path.splitext(os.path.basename(item.nfo))[0]
             
             if name_file != 'tvshow' :

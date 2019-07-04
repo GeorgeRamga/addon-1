@@ -24,7 +24,7 @@ def ultimas_series(item):
     logger.info()
     itemlist = []
     data = httptools.downloadpage(item.url).data
-    data = scrapertools.find_single_match(data, 'Últimos capitulos agregados.*?/div><!-- .content-box -->')
+    data = scrapertools.find_single_match(data, 'Últimos Animes agregados</h3></div>.*?</div><!-- .content-box -->')
     patron  = '<a title="([^"]+).*?'
     patron += 'href="([^"]+)".*?'
     patron += 'src="([^"]+)'
@@ -93,14 +93,13 @@ def series(item):
     # Descarga la pagina
     data = httptools.downloadpage(item.url).data
     # Extrae las entradas
-    patron  = '(?is)let-post.*?src="([^"]+).*?'
-    patron += 'alt="([^"]+).*?'
-    patron += 'href="([^"]+).*?'
-    patron += '<p>([^\<]+).*?'
-    patron += 'eps-num">([^<]+)'
+    patron  = '<a title="([^"]+)" href="([^"]+)" rel="nofollow">.*?'
+    patron += 'src="([^"]+)".*?'
+    patron += 'eps-num">([^<]+)</span>.*?'
+    patron += '<p>([^\<]+)</p>'
     matches = scrapertools.find_multiple_matches(data, patron)
     itemlist = []
-    for scrapedthumbnail, scrapedtitle, scrapedurl, scrapedplot, scrapedepisode in matches:
+    for scrapedtitle, scrapedurl, scrapedthumbnail, scrapedepisode, scrapedplot in matches:
         title = scrapedtitle + " (" + scrapedepisode + ")"
         scrapedthumbnail = scrapedthumbnail.replace("thumbnail", "image")
         plot = scrapertools.htmlclean(scrapedplot)
@@ -173,23 +172,33 @@ def findvideos(item):
     aux_url = []
     data = httptools.downloadpage(item.url).data
     list_videos = scrapertools.find_multiple_matches(data, '<iframe class="player_conte" src="([^"]+)"')
+    list_down = scrapertools.find_multiple_matches(data, "blank\" href='(.*?)'>Descargar")
     index = 1
     for e in list_videos:
-        if e.startswith(host + "/jk"):
+        if e.startswith(host + "/jk") or "um.php" in e:
             headers = {"Referer": item.url}
             data = httptools.downloadpage(e, headers=headers).data
             url = scrapertools.find_single_match(data, '<embed class="player_conte".*?&file=([^\"]+)\"')
+            if "um.php?" in e:
+                url = decode_url(data)
+            
             if not url:
                 url = scrapertools.find_single_match(data, 'source src="([^\"]+)\"')
+
             if not url:
                 url = scrapertools.find_single_match(data, '<iframe class="player_conte" src="([^\"]+)\"')
+
             if "jkanime" in url:
                 url = httptools.downloadpage(url, follow_redirects=False, only_headers=True).headers.get("location", "")
+
             if url:
                 itemlist.append(item.clone(title="Enlace encontrado en server #" + str(index) + " (%s)", url=url, action="play"))
                 index += 1
         else:
             aux_url.append(item.clone(title="Enlace encontrado (%s)", url=e, action="play"))
+    
+    for d in list_down:
+        aux_url.append(item.clone(title="Enlace encontrado (%s)", url=d, action="play"))
     itemlist.extend(aux_url)
     itemlist = servertools.get_servers_itemlist(itemlist, lambda i: i.title % i.server.capitalize())
     for videoitem in itemlist:
@@ -197,3 +206,23 @@ def findvideos(item):
         videoitem.channel = item.channel
         videoitem.thumbnail = item.thumbnail
     return itemlist
+
+def btoa(s):
+    import base64
+    return base64.b64encode(s.to_string().value)
+    
+def decode_url(data):
+    import js2py
+    import re
+    data = re.sub(r'\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
+    js = scrapertools.find_single_match(data, '<script>(l.*?)</script>')
+    
+    part = js.split("+ll")
+    part0 = part[1].split("String['fromCharCode'")[0]
+    part1 = part[1].replace(part0, "")
+    part1 = re.sub(r'(l.*?)\(\(\[', 'window.btoa(([', part1)
+    logger.info("zebiiiii-%s" % part1)
+    context = js2py.EvalJs({ "btoa": btoa });
+    url = "htt%s" % context.eval(part1)
+    logger.info(url)
+    return url

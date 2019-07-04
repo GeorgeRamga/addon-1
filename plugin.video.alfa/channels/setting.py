@@ -65,6 +65,8 @@ def menu_channels(item):
     from core import channeltools
     channel_list = channelselector.filterchannels("all")
     for channel in channel_list:
+        if not channel.channel:
+            continue
         channel_parameters = channeltools.get_channel_parameters(channel.channel)
         if channel_parameters["has_settings"]:
             itemlist.append(Item(channel=CHANNELNAME, title=".    " + config.get_localized_string(60547) % channel.title,
@@ -87,12 +89,37 @@ def channel_config(item):
 def setting_torrent(item):
     logger.info()
 
+    LIBTORRENT_PATH = config.get_setting("libtorrent_path", server="torrent", default="")
+    LIBTORRENT_ERROR = config.get_setting("libtorrent_error", server="torrent", default="")
     default = config.get_setting("torrent_client", server="torrent", default=0)
+    BUFFER = config.get_setting("mct_buffer", server="torrent", default="50")
+    DOWNLOAD_PATH = config.get_setting("mct_download_path", server="torrent", default=config.get_setting("downloadpath"))
+    BACKGROUND = config.get_setting("mct_background_download", server="torrent", default=True)
+    RAR = config.get_setting("mct_rar_unpack", server="torrent", default=True)
+    BUFFER_BT = config.get_setting("bt_buffer", server="torrent", default="50")
+    DOWNLOAD_PATH_BT = config.get_setting("bt_download_path", server="torrent", default=config.get_setting("downloadpath"))
 
     torrent_options = [config.get_localized_string(30006), config.get_localized_string(70254), config.get_localized_string(70255)]
     torrent_options.extend(platformtools.torrent_client_installed())
+    
 
     list_controls = [
+        {
+            "id": "libtorrent_path",
+            "type": "text",
+            "label": "Libtorrent path",
+            "default": LIBTORRENT_PATH,
+            "enabled": True,
+            "visible": False
+        },
+        {
+            "id": "libtorrent_error",
+            "type": "text",
+            "label": "libtorrent error",
+            "default": LIBTORRENT_ERROR,
+            "enabled": True,
+            "visible": False
+        },
         {
             "id": "list_torrent",
             "type": "list",
@@ -101,6 +128,54 @@ def setting_torrent(item):
             "enabled": True,
             "visible": True,
             "lvalues": torrent_options
+        },
+        {
+            "id": "mct_buffer",
+            "type": "text",
+            "label": "MCT - Tamaño del Buffer a descargar antes de la reproducción",
+            "default": BUFFER,
+            "enabled": True,
+            "visible": "eq(-1,%s)" % torrent_options[2]
+        },
+        {
+            "id": "mct_download_path",
+            "type": "text",
+            "label": "MCT - Ruta de la carpeta de descarga",
+            "default": DOWNLOAD_PATH,
+            "enabled": True,
+            "visible": "eq(-2,%s)" % torrent_options[2]
+        },
+        {
+            "id": "bt_buffer",
+            "type": "text",
+            "label": "BT - Tamaño del Buffer a descargar antes de la reproducción",
+            "default": BUFFER_BT,
+            "enabled": True,
+            "visible": "eq(-3,%s)" % torrent_options[1]
+        },
+        {
+            "id": "bt_download_path",
+            "type": "text",
+            "label": "BT - Ruta de la carpeta de descarga",
+            "default": DOWNLOAD_PATH_BT,
+            "enabled": True,
+            "visible": "eq(-4,%s)" % torrent_options[1]
+        },
+        {
+            "id": "mct_rar_unpack",
+            "type": "bool",
+            "label": "¿Quiere que se descompriman los archivos RAR y ZIP para su reproducción?",
+            "default": RAR,
+            "enabled": True,
+            "visible": True
+        },
+        {
+            "id": "mct_background_download",
+            "type": "bool",
+            "label": "¿Se procesa la descompresión de RARs en segundo plano?",
+            "default": BACKGROUND,
+            "enabled": True,
+            "visible": True
         }
     ]
 
@@ -111,6 +186,18 @@ def setting_torrent(item):
 def save_setting_torrent(item, dict_data_saved):
     if dict_data_saved and "list_torrent" in dict_data_saved:
         config.set_setting("torrent_client", dict_data_saved["list_torrent"], server="torrent")
+    if dict_data_saved and "mct_buffer" in dict_data_saved:
+        config.set_setting("mct_buffer", dict_data_saved["mct_buffer"], server="torrent")
+    if dict_data_saved and "mct_download_path" in dict_data_saved:
+        config.set_setting("mct_download_path", dict_data_saved["mct_download_path"], server="torrent")
+    if dict_data_saved and "mct_background_download" in dict_data_saved:
+        config.set_setting("mct_background_download", dict_data_saved["mct_background_download"], server="torrent")
+    if dict_data_saved and "mct_rar_unpack" in dict_data_saved:
+        config.set_setting("mct_rar_unpack", dict_data_saved["mct_rar_unpack"], server="torrent")
+    if dict_data_saved and "bt_buffer" in dict_data_saved:
+        config.set_setting("bt_buffer", dict_data_saved["bt_buffer"], server="torrent")
+    if dict_data_saved and "bt_download_path" in dict_data_saved:
+        config.set_setting("bt_download_path", dict_data_saved["bt_download_path"], server="torrent")
 
 def menu_servers(item):
     logger.info()
@@ -299,7 +386,7 @@ def submenu_tools(item):
 
 
     itemlist.append(Item(channel=CHANNELNAME, action="check_quickfixes", folder=False,
-                         title="Comprobar actualizaciones urgentes", plot="Versión actual: %s" % config.get_addon_version() ))
+                         title="Comprobar actualizaciones urgentes (Actual: Alfa %s)" %config.get_addon_version(), plot="Versión actual: %s" % config.get_addon_version() ))
     itemlist.append(Item(channel=CHANNELNAME, action="update_quasar", folder=False,
                          title="Actualizar addon externo Quasar"))
     itemlist.append(Item(channel=CHANNELNAME, action="", title="", folder=False,
@@ -738,3 +825,382 @@ def overwrite_tools(item):
                 logger.error(message)
 
         p_dialog2.close()
+
+        
+def report_menu(item):
+    logger.info('URL: ' + item.url)
+    
+    from channelselector import get_thumb
+    
+    thumb_debug = get_thumb("update.png")
+    thumb_error = get_thumb("error.png")
+    thumb_next = get_thumb("next.png")
+    itemlist = []
+    paso = 1
+
+    # Crea un menú de opciones para permitir al usuario reportar un fallo de Alfa a través de un servidor "pastebin"
+    # Para que el informe sea completo el usuario debe tener la opción de DEBUG=ON
+    # Los servidores "pastbin" gratuitos tienen limitación de capacidad, por lo que el tamaño del log es importante
+    # Al final de la operación de upload, se pasa al usuario la dirección de log en el servidor para que los reporte
+    
+    itemlist.append(Item(channel=item.channel, action="", title="[COLOR gold]SIGA los siguiente PASOS:[/COLOR]", 
+                thumbnail=thumb_next, folder=False))
+    #if not config.get_setting('debug'):
+    itemlist.append(Item(channel=item.channel, action="activate_debug", extra=True, 
+                    title="PASO %s: Active DEBUG aquí antes de generar el log" % 
+                    str(paso), thumbnail=thumb_debug, folder=False))
+    paso += 1
+    itemlist.append(Item(channel="channelselector", action="getmainlist", 
+                    title="PASO %s: Reproduzca el problema y vuelva al PASO %s" % 
+                    (str(paso), str(paso+1)), thumbnail=thumb_debug, folder=False))
+    paso += 1
+    itemlist.append(Item(channel=item.channel, action="report_send", 
+                    title="PASO %s: Genere el informe de FALLO desde aquí" % 
+                    str(paso), thumbnail=thumb_error))
+    paso += 1
+    #if config.get_setting('debug'):
+    itemlist.append(Item(channel=item.channel, action="activate_debug", extra=False, 
+                    title="PASO %s: Desactive DEBUG aquí -opcional-" % str(paso), 
+                    thumbnail=thumb_debug, folder=False))
+    paso += 1
+    
+    if item.url:
+        itemlist.append(Item(channel=item.channel, action="", title="", folder=False))
+    
+        itemlist.append(Item(channel=item.channel, action="", 
+                    title="[COLOR limegreen]Ha terminado de generar el informe de fallo,[/COLOR]", 
+                    thumbnail=thumb_next, folder=False))
+        itemlist.append(Item(channel=item.channel, action="", 
+                    title="[COLOR limegreen]Repórtelo en el Foro de Alfa: [/COLOR][COLOR yellow](pinche si Chrome)[/COLOR]", 
+                    thumbnail=thumb_next, 
+                    folder=False))        
+        itemlist.append(Item(channel=item.channel, action="call_chrome", 
+                    url='https://alfa-addon.com/foros/ayuda.12/', 
+                    title="**- [COLOR yellow]https://alfa-addon.com/foros/ayuda.12/[/COLOR] -**", 
+                    thumbnail=thumb_next, unify=False, folder=False))
+    
+        if item.one_use:
+            action = ''
+            url = ''
+        else:
+            action = 'call_chrome'
+            url = item.url
+        itemlist.append(Item(channel=item.channel, action=action, 
+                    title="**- LOG: [COLOR gold]%s[/COLOR] -**" % item.url, url=url, 
+                    thumbnail=thumb_next, unify=False, folder=False))
+        
+        if item.one_use:
+            itemlist.append(Item(channel=item.channel, action="", 
+                    title="[COLOR orange]NO ACCEDA al INFORME: se BORRARÁ[/COLOR]", 
+                    thumbnail=thumb_next, folder=False))
+            itemlist.append(Item(channel=item.channel, action="", 
+                    title="[COLOR orange]ya que es de un solo uso[/COLOR]", 
+                    thumbnail=thumb_next, folder=False))
+    
+    return itemlist
+    
+    
+def activate_debug(item):
+    logger.info(item.extra)
+    from platformcode import platformtools
+    
+    # Activa/Desactiva la opción de DEBUB en settings.xml
+    
+    if isinstance(item.extra, str):
+        return report_menu(item)
+    if item.extra:
+        config.set_setting('debug', True)
+        platformtools.dialog_notification('Modo DEBUG', 'Activado')
+    else:
+        config.set_setting('debug', False)
+        platformtools.dialog_notification('Modo DEBUG', 'Desactivado')
+        
+        
+def report_send(item, description='', fatal=False):
+    import xbmc
+    import xbmcaddon
+    import random
+    import urllib
+    import urlparse
+    import traceback
+    import sys
+    import platform
+    import os
+    import re
+
+    try:
+        requests_status = True
+        import requests
+    except:
+        requests_status = False
+        logger.error(traceback.format_exc())
+    
+    from core import jsontools, httptools, proxytools, scrapertools
+    from platformcode import envtal
+    
+    # Esta función realiza la operación de upload del LOG.  El tamaño del archivo es de gran importacia porque
+    # los servicios de "pastebin" gratuitos tienen limitaciones, a veces muy bajas.
+    # Hay un ervicio, File.io, que permite subida directa de "achivos binarios" a través de la función "request"
+    # Esto aumenta dráticamente la capacidad del envío del log, muy por encima de lo necesitado
+    # Por ello es necesario contar con una lista de servicios "pastebin" que puedan realizar la operación de upload,
+    # ya sea por capacidad disponible o por disponibilidad.
+    # Para poder usar los servidores "pastebin" con un código común, se ha creado un diccionario con los servidores
+    # y sus características.  En cada entrada se recogen las peculiaridades de cada servidor, tanto para formar
+    # la petición consu POST como para la forma de recibir el código del upload en la respuesta (json, header, regex
+    # en datos,...).
+    # Al iniciar este método se aleatoriza la lista de servidores "pastebin" para evitar que todos los usuarios hagan 
+    # uploads contra el mismo servidor y puedan ocasionar sobrecargas.
+    # Se lee el arcivo de log y se compara su tamaño con la capacidad del servidor (parámetro 10 de cada entrada 
+    # (empezando desde 0), expresado en MB, hasta que se encuentra uno capacitado.  Si el upload falla se sigue intentado
+    # con los siguientes servidores que tengan la capacidad requerida.  
+    # Si no se encuentra ningun servidor disponible se pide al usuario que lo intente más tarde, o que suba el log
+    # directamente en el foro.  Si es un problema de tamaño, se le pide que reicinie Kodi y reporducza el fallo, para
+    # que el LOG sea más pequeño.
+    
+    
+    pastebin_list = {
+    'hastebin': ('1', 'https://hastebin.com/', 'documents', 'random', '', '', 
+                'data', 'json', 'key', '', '0.29', '10', True, 'raw/', '', ''), 
+    'dpaste': ('1', 'http://dpaste.com/', 'api/v2/', 'random', 'content=', 
+                '&syntax=text&title=%s&poster=alfa&expiry_days=7', 
+                'headers', '', '', 'location', '0.23', '15', True, '', '.txt', ''),
+    'ghostbin': ('1', 'https://ghostbin.com/', 'paste/new', 'random', 'lang=text&text=', 
+                '&expire=2d&password=&title=%s', 
+                'data', 'regex', '<title>(.*?)\s*-\s*Ghostbin<\/title>', '', 
+                '0.49', '15', False, 'paste/', '', ''),
+    'write.as': ('1', 'https://write.as/', 'api/posts', 'random', 'body=', '&title=%s', 
+                'data', 'json', 'data', 'id', '0.018', '15', True, '', '', ''),
+    'oneclickpaste': ('1', 'http://oneclickpaste.com/', 'index.php', 'random', 'paste_data=', 
+                '&title=%s&format=text&paste_expire_date=1W&visibility=0&pass=&submit=Submit', 
+                'data', 'regex', '<a class="btn btn-primary" href="[^"]+\/(\d+\/)">\s*View\s*Paste\s*<\/a>', 
+                '', '0.060', '5', True, '', '', ''),
+    'bpaste': ('1', 'https://bpaste.net/', '', 'random', 'code=', '&lexer=text&expiry=1week', 
+                'data', 'regex', 'View\s*<a\s*href="[^*]+/(.*?)">raw<\/a>', '', 
+                '0.79', '15', True, 'raw/', '', ''),
+    'dumpz': ('0', 'http://dumpz.org/', 'api/dump', 'random', 'code=', '&lexer=text&comment=%s&password=', 
+                'headers', '', '', 'location', '0.99', '15', False, '', '', ''),
+    'file.io': ('1', 'https://file.io/', '', 'random', '', 'expires=1w', 
+                'requests', 'json', 'key', '', '99.0', '30', False, '', '.log', ''), 
+    'uploadfiles': ('1', 'https://up.uploadfiles.io/upload', '', 'random', '', '', 
+                'requests', 'json', 'url', '', '99.0', '30', False, None, '', '') 
+                 }
+    pastebin_list_last = ['hastebin', 'ghostbin', 'file.io']            # Estos servicios los dejamos los últimos
+    pastebin_one_use = ['file.io']                                      # Servidores de un solo uso y se borra
+    pastebin_dir = []
+    paste_file = {}
+    paste_params = ()
+    paste_post = ''
+    status = False
+    msg = 'Servicio no disponible.  Inténtelo más tarde'
+    
+    # Se verifica que el DEBUG=ON, si no está se rechaza y se pide al usuario que lo active y reproduzca el fallo
+    if not config.get_setting('debug'):
+        platformtools.dialog_notification('DEBUG debe estar ACTIVO', 'antes de generar el informe')
+        return report_menu(item)
+    
+    # De cada al futuro se permitira al usuario que introduzca una breve descripción del fallo que se añadirá al LOG
+    if description == 'OK':
+        description = platformtools.dialog_input('', 'Introduzca una breve descripción del fallo')
+
+    # Escribimos en el log algunas variables de Kodi y Alfa que nos ayudarán en el diagnóstico del fallo
+    var = proxytools.logger_disp(debugging=True)
+    environment = envtal.list_env()
+    if not environment['log_path']:
+        environment['log_path'] = str(filetools.join(xbmc.translatePath("special://logpath/"), 'kodi.log'))
+        environment['log_size_bytes'] = str(filetools.getsize(environment['log_path']))
+        environment['log_size'] = str(round(float(environment['log_size_bytes']) / (1024*1024), 3))
+    
+    # Se lee el archivo de LOG
+    log_path = environment['log_path']
+    if filetools.exists(log_path):
+        log_size_bytes = int(environment['log_size_bytes'])             # Tamaño del archivivo en Bytes
+        log_size = float(environment['log_size'])                       # Tamaño del archivivo en MB
+        log_data = filetools.read(log_path)                             # Datos del archivo
+        if not log_data:                                                # Algún error?
+            platformtools.dialog_notification('No puede leer el log de Kodi', 'Comuniquelo directamente en el Foro de Alfa')
+            return report_menu(item)
+    else:                                                               # Log no existe o path erroneo?
+        platformtools.dialog_notification('LOG de Kodi no encontrado', 'Comuniquelo directamente en el Foro de Alfa')
+        return report_menu(item)
+
+    # Si se ha introducido la descripción del fallo, se inserta la principio de los datos del LOG
+    log_title = '***** DESCRIPCIÓN DEL FALLO *****'
+    if description:
+        log_data = '%s\n%s\n\n%s' %(log_title, description, log_data)
+    
+    # Se aleatorizan los nombre de los servidores "patebin"
+    for label_a, value_a in pastebin_list.items():
+        if label_a not in pastebin_list_last:
+            pastebin_dir.append(label_a)
+    random.shuffle(pastebin_dir)
+    pastebin_dir.extend(pastebin_list_last)                             # Estos servicios los dejamos los últimos
+    
+    #pastebin_dir = ['file.io']                                          # Para pruebas de un servicio
+        
+    # Se recorre la lista de servidores "pastebin" hasta localizar uno activo, con capacidad y disponibilidad
+    for paste_name in pastebin_dir:
+        if pastebin_list[paste_name][0] != '1':                         # Si no esta activo el servidore, pasamos
+            continue
+        if pastebin_list[paste_name][6] == 'requests' and not requests_status:  # Si "requests" no esta activo, pasamos
+            continue
+
+        paste_host = pastebin_list[paste_name][1]                       # URL del servidor "pastebin"
+        paste_sufix = pastebin_list[paste_name][2]                      # sufijo del API para el POST
+        paste_title = ''
+        if pastebin_list[paste_name][3] == 'random':
+            paste_title = "LOG" + str(random.randrange(1, 999999999))   # Título del LOG
+        paste_post1 = pastebin_list[paste_name][4]                      # Parte inicial del POST
+        paste_post2 = pastebin_list[paste_name][5]                      # Parte secundaria del POST
+        paste_type = pastebin_list[paste_name][6]                       # Tipo de downloadpage: DATA o HEADERS
+        paste_resp = pastebin_list[paste_name][7]                       # Tipo de respuesta: JSON o datos con REGEX
+        paste_resp_key = pastebin_list[paste_name][8]                   # Si es JSON, etiqueta `primaria con la CLAVE
+        paste_url = pastebin_list[paste_name][9]                        # Etiqueta primaria para HEADER y sec. para JSON
+        paste_file_size = float(pastebin_list[paste_name][10])          # Capacidad en MB del servidor
+        if paste_file_size > 0:                                         # Si es 0, la capacidad es ilimitada
+            if log_size > paste_file_size:                              # Verificación de capacidad y tamaño
+                msg = 'Archivo de log demasiado grande.  Reinicie Kodi y reinténtelo'
+                continue
+        paste_timeout = int(pastebin_list[paste_name][11])              # Timeout para el servidor
+        paste_random_headers = pastebin_list[paste_name][12]            # Utiliza RAMDOM headers para despistar el serv.?
+        paste_host_return = pastebin_list[paste_name][13]               # Parte de url para componer la clave para usuario
+        paste_host_return_tail = pastebin_list[paste_name][14]          # Sufijo de url para componer la clave para usuario
+        paste_headers = {}
+        if pastebin_list[paste_name][15]:                               # Headers requeridas por el servidor
+            paste_headers.update(jsontools.load((pastebin_list[paste_name][15])))
+
+        if paste_name in pastebin_one_use:
+            pastebin_one_use_msg = '[COLOR red]NO ACCEDA al INFORME: se BORRARÁ[/COLOR]'
+            item.one_use = True
+        else:
+            pastebin_one_use_msg = ''
+        
+        try:
+            # Se crea el POST con las opciones del servidor "pastebin"
+            # Se trata el formato de "requests"
+            if paste_type == 'requests':
+                paste_file = {'file': (paste_title+'.log', log_data)}
+                if paste_post1:
+                    paste_file.update(paste_post1)
+                if paste_post2:
+                    if '%s' in paste_post2:
+                        paste_params = paste_post2 % (paste_title+'.log', log_size_bytes)
+                    else:
+                        paste_params = paste_post2
+            
+            #Se trata el formato de downloads
+            else:
+                #log_data = 'Test de Servidor para ver su viabilidad (áéíóúñ¿?)'
+                if paste_name in ['hastebin']:                              # Hay algunos servicios que no necesitan "quote"
+                    paste_post = log_data
+                else:
+                    paste_post = urllib.quote_plus(log_data)                # Se hace un "quote" de los datos del LOG
+                if paste_post1:
+                    paste_post = '%s%s' % (paste_post1, paste_post)
+                if paste_post2:
+                    if '%s' in paste_post2:
+                        paste_post += paste_post2 % paste_title
+                    else:
+                        paste_post += paste_post2
+
+            # Se hace la petición en downloadpage con HEADERS o DATA, con los parámetros del servidor
+            if paste_type == 'headers':
+                data = httptools.downloadpage(paste_host+paste_sufix, post=paste_post, 
+                            timeout=paste_timeout, random_headers=paste_random_headers, 
+                            headers=paste_headers).headers
+            elif paste_type == 'data':
+                data = httptools.downloadpage(paste_host+paste_sufix, post=paste_post, 
+                            timeout=paste_timeout, random_headers=paste_random_headers, 
+                            headers=paste_headers).data
+            
+            # Si la petición es con formato REQUESTS, se realiza aquí
+            elif paste_type == 'requests':
+                #data = requests.post(paste_host, params=paste_params, files=paste_file, 
+                #            timeout=paste_timeout)
+                data = httptools.downloadpage(paste_host, params=paste_params, file=log_data, 
+                            file_name=paste_title+'.log', timeout=paste_timeout, 
+                            random_headers=paste_random_headers, headers=paste_headers)
+        except:
+            msg = 'Inténtelo más tarde'
+            logger.error('Fallo al guardar el informe. ' + msg)
+            logger.error(traceback.format_exc())
+            continue
+
+        # Se analiza la respuesta del servidor y se localiza la clave del upload para formar la url a pasar al usuario
+        if data:
+            paste_host_resp = paste_host
+            if paste_host_return == None:                               # Si devuelve la url completa, no se compone
+                paste_host_resp = ''
+                paste_host_return = ''
+            
+            # Respuestas a peticiones REQUESTS
+            if paste_type == 'requests':                                # Respuesta de petición tipo "requests"?
+                if paste_resp == 'json':                                                # Respuesta en formato JSON?
+                    if paste_resp_key in data.data:
+                        if not paste_url:
+                            key = jsontools.load(data.data)[paste_resp_key]             # con una etiqueta
+                        else:
+                            key = jsontools.load(data.data)[paste_resp_key][paste_url]  # con dos etiquetas anidadas
+                        item.url = "%s%s%s" % (paste_host_resp+paste_host_return, key, 
+                                    paste_host_return_tail)
+                    else:
+                        logger.error('ERROR en formato de retorno de datos. data.data=' + 
+                                    str(data.data))
+                        continue
+            
+            # Respuestas a peticiones DOWNLOADPAGE
+            elif paste_resp == 'json':                                  # Respuesta en formato JSON?
+                if paste_resp_key in data:
+                    if not paste_url:
+                        key = jsontools.load(data)[paste_resp_key]      # con una etiqueta
+                    else:
+                        key = jsontools.load(data)[paste_resp_key][paste_url]   # con dos etiquetas anidadas
+                    item.url = "%s%s%s" % (paste_host_resp+paste_host_return, key, 
+                                    paste_host_return_tail)
+                else:
+                    logger.error('ERROR en formato de retorno de datos. data=' + str(data))
+                    continue
+            elif paste_resp == 'regex':                                 # Respuesta en DATOS, a buscar con un REGEX?
+                key = scrapertools.find_single_match(data, paste_resp_key)
+                if key:
+                    item.url = "%s%s%s" % (paste_host_resp+paste_host_return, key, 
+                                    paste_host_return_tail)
+                else:
+                    logger.error('ERROR en formato de retorno de datos. data=' + str(data))
+                    continue
+            elif paste_type == 'headers':                               # Respuesta en HEADERS, a buscar en "location"?
+                if paste_url in data:
+                    item.url = data[paste_url]                          # Etiqueta de retorno de la clave
+                    item.url =  urlparse.urljoin(paste_host_resp + paste_host_return, 
+                                    item.url + paste_host_return_tail)
+                else:
+                    logger.error('ERROR en formato de retorno de datos. response.headers=' + 
+                                    str(data))
+                    continue
+            else:
+                logger.error('ERROR en formato de retorno de datos. paste_type=' + 
+                                    str(paste_type) + ' / DATA: ' + data)
+                continue
+
+            status = True                                               # Operación de upload terminada con éxito
+            logger.info('Informe de Fallo en Alfa CREADO: ' + str(item.url))    #Se guarda la URL del informe a usuario
+            if fatal:                                                   # De uso futuro, para logger.crash
+                platformtools.dialog_ok('Informe de ERROR en Alfa CREADO', 'Repórtelo en el foro agregando ERROR FATAL y esta URL: ', '[COLOR gold]%s[/COLOR]' % item.url, pastebin_one_use_msg)
+            else:                                                       # Se pasa la URL del informe a usuario
+                platformtools.dialog_ok('Informe de Fallo en Alfa CREADO', 'Repórtelo en el foro agregando una descripcion del fallo y esta URL: ', '[COLOR gold]%s[/COLOR]' % item.url, pastebin_one_use_msg)
+
+            break                                                       # Operación terminado, no seguimos buscando
+    
+    if not status and not fatal:                                        # Operación fracasada...
+        platformtools.dialog_notification('Fallo al guardar el informe', msg)   #... se notifica la causa
+        logger.error('Fallo al guardar el informe. ' + msg)
+    
+    # Se devuelve control con item.url actualizado, así aparecerá en el menú la URL del informe
+    return report_menu(item)
+    
+    
+def call_chrome(item):
+    from lib import generictools
+
+    resultado = generictools.call_chrome(item.url)
+    
+    return resultado

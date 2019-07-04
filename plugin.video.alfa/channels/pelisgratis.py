@@ -8,7 +8,6 @@ from core import httptools
 from core import scrapertools
 from core import servertools
 from core import tmdb
-from core import jsontools
 from core.item import Item
 from platformcode import config, logger
 from channelselector import get_thumb
@@ -73,12 +72,12 @@ def mainlist(item):
                                extra='generos'
                                ))
 
-    itemlist.append(item.clone(title="Alfabetico",
-                               action="seccion",
-                               url=host,
-                               thumbnail=get_thumb('alphabet', auto=True),
-                               extra='a-z'
-                               ))
+    # itemlist.append(item.clone(title="Alfabetico",
+    #                            action="seccion",
+    #                            url=host,
+    #                            thumbnail=get_thumb('alphabet', auto=True),
+    #                            extra='a-z'
+    #                            ))
 
     itemlist.append(item.clone(title="Mas Vistas",
                                action="lista",
@@ -115,11 +114,11 @@ def lista(item):
     logger.info()
     itemlist = []
     data = get_source(item.url)
-    patron = 'article id=post-\d+.*?href=([^>]+)>.*?src=(.*?)\s.*?"Title">([^<]+)<(.*?)</a>.*?<p>([^<]+)</p>'
+    patron = 'article id="post-\d+".*?href="([^"]+)".*?src="([^"]+)".*?"Title">([^<]+)<(.*?)</a>.*?<p>([^<]+)</p>'
 
     matches = re.compile(patron, re.DOTALL).findall(data)
     for scrapedurl, scrapedthumbnail, scrapedtitle, year_data, scrapedplot in matches:
-        year = scrapertools.find_single_match(year_data, 'Year>(\d{4})<')
+        year = scrapertools.find_single_match(year_data, '"Year">(\d{4})<')
 
         url = scrapedurl
         thumbnail = scrapedthumbnail
@@ -158,9 +157,9 @@ def seccion(item):
     itemlist = []
     data = get_source(item.url)
     if item.extra == 'generos':
-        patron = 'menu-item-object-category.*?<a href=([^<]+)>([^<]+)</a>'
+        patron = 'menu-item-object-category.*?<a href="([^"]+)">([^<]+)</a>'
     elif item.extra == 'a-z':
-        patron = '<li><a href=([^<]+)>(\w|#)<\/a><\/li>'
+        patron = '<li><a href="([^"]+)">(\w|#)<\/a><\/li>'
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for scrapedurl, scrapedtitle in matches:
@@ -226,8 +225,7 @@ def server_itatroniks(urls_page):
     matches = scrapertools.find_multiple_matches(sub_data, 'button id="([^"]+)')
     headers1 = ({"X-Requested-With":"XMLHttpRequest"})
     for serv in matches:
-        data1 = httptools.downloadpage("https://itatroniks.com/get/%s/%s" %(id, serv), headers = headers1).data
-        data_json = jsontools.load(data1)
+        data_json = httptools.downloadpage("https://itatroniks.com/get/%s/%s" %(id, serv), headers=headers1).json
         urls_page = ""
         try:
             if "finished" == data_json["status"]: urls_page = "https://%s/embed/%s" %(data_json["server"], data_json["extid"])
@@ -246,8 +244,7 @@ def server_repros(urls_page):
     for idurl in urls_page1:
         #post = {"codigo":idurl}
         #post = urllib.urlencode(post)
-        dd1 = httptools.downloadpage("https://repros.live/player/ajaxdata", post = urllib.urlencode({"codigo":idurl}), headers = headers1).data
-        data_json = jsontools.load(dd1)
+        data_json = httptools.downloadpage("https://repros.live/player/ajaxdata", post = urllib.urlencode({"codigo":idurl}), headers = headers1).json
         new_data.append(data_json["url"])
 
 

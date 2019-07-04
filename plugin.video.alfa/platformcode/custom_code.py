@@ -8,6 +8,9 @@ import json
 import traceback
 import xbmc
 import xbmcaddon
+import threading
+import subprocess
+import time
 
 from platformcode import config, logger, platformtools
 
@@ -55,14 +58,26 @@ def init():
         
     Tiempos:    Copiando 7 archivos de prueba, el proceso ha tardado una décima de segundo.
     """
-    
+
     try:
+        #Verifica si Kodi tiene algún achivo de Base de Datos de Vídeo de versiones anteriores, entonces los borra
+        verify_Kodi_video_DB()
+        
+        #LIBTORRENT: se descarga el binario de Bibtorrent cada vez que se actualiza Alfa
+        try:
+            threading.Thread(target=update_libtorrent).start()      # Creamos un Thread independiente, hasta el fin de Kodi
+            time.sleep(2)                                           # Dejamos terminar la inicialización...
+        except:                                                     # Si hay problemas de threading, nos vamos
+            logger.error(traceback.format_exc())
+        
         #QUASAR: Preguntamos si se hacen modificaciones a Quasar
         if not filetools.exists(os.path.join(config.get_data_path(), "quasar.json")) and not config.get_setting('addon_quasar_update', default=False):
             question_update_external_addon("quasar")
         
         #QUASAR: Hacemos las modificaciones a Quasar, si está permitido, y si está instalado
-        if config.get_setting('addon_quasar_update', default=False):
+        if config.get_setting('addon_quasar_update', default=False) or \
+                        (filetools.exists(os.path.join(config.get_data_path(), \
+                        "quasar.json")) and not xbmc.getCondVisibility('System.HasAddon("plugin.video.quasar")')):
             if not update_external_addon("quasar"):
                 platformtools.dialog_notification("Actualización Quasar", "Ha fallado. Consulte el log")
         
@@ -105,6 +120,8 @@ def create_json(custom_code_json_path, json_name=json_data_file_name):
 
     #Guardamaos el json con la versión de Alfa vacía, para permitir hacer la primera copia
     json_data_file = filetools.join(custom_code_json_path, json_name)
+    if filetools.exists(json_data_file):
+        filetools.remove(json_data_file)
     json_file = open(json_data_file, "a+")
     json_file.write(json.dumps({"addon_version": ""}))
     json_file.close()
@@ -119,8 +136,14 @@ def verify_copy_folders(custom_code_dir, custom_code_json_path):
     json_data_file = filetools.join(custom_code_json_path, json_data_file_name)
     json_data = jsontools.load(filetools.read(json_data_file))
     current_version = config.get_addon_version(with_fix=False)
-    if current_version == json_data['addon_version']:
-        return
+    if not json_data or not 'addon_version' in json_data: 
+        create_json(custom_code_json_path)
+        json_data = jsontools.load(filetools.read(json_data_file))
+    try:
+        if current_version == json_data['addon_version']:
+            return
+    except:
+        logger.error(traceback.format_exc(1))
     
     #Ahora copiamos los archivos desde el área de Userdata, Custom_code, sobre las carpetas del add-on
     for root, folders, files in os.walk(custom_code_dir):
@@ -157,7 +180,8 @@ def question_update_external_addon(addon_name):
         create_json(config.get_data_path(), "%s.json" % addon_name)
     
     return stat
-    
+
+
 def update_external_addon(addon_name):
     logger.info(addon_name)
     
@@ -185,5 +209,132 @@ def update_external_addon(addon_name):
             return True
         else:
             logger.error('Alguna carpeta no existe: Alfa: %s o %s: %s' % (alfa_addon_updates, addon_name, addon_path))
+    # Se ha desinstalado Quasar, reseteamos la opción
+    else:
+        config.set_setting('addon_quasar_update', False)
+        if filetools.exists(filetools.join(config.get_data_path(), "%s.json" % addon_name)):
+            filetools.remove(filetools.join(config.get_data_path(), "%s.json" % addon_name))
+        return True
     
     return False
+    
+    
+def update_libtorrent():
+    logger.info()
+    
+    if not config.get_setting("mct_buffer", server="torrent", default=""):
+        default = config.get_setting("torrent_client", server="torrent", default=0)
+        config.set_setting("torrent_client", default, server="torrent")
+        config.set_setting("mct_buffer", "50", server="torrent")
+        config.set_setting("mct_download_path", config.get_setting("downloadpath"), server="torrent")
+        config.set_setting("mct_background_download", True, server="torrent")
+        config.set_setting("mct_rar_unpack", True, server="torrent")
+        config.set_setting("bt_buffer", "50", server="torrent")
+        config.set_setting("bt_download_path", config.get_setting("downloadpath"), server="torrent")
+        
+    if not filetools.exists(os.path.join(config.get_runtime_path(), "custom_code.json")) or not \
+                    config.get_setting("unrar_path", server="torrent", default=""):
+    
+        path = os.path.join(config.get_runtime_path(), 'lib', 'rarfiles')
+        creationflags = ''
+        sufix = ''
+        unrar = ''
+        for device in filetools.listdir(path):
+            if xbmc.getCondVisibility("system.platform.android") and 'android' not in device: continue
+            if xbmc.getCondVisibility("system.platform.windows") and 'windows' not in device: continue
+            if 'windows' in device:
+                creationflags = 0x08000000
+                sufix = '.exe'
+            unrar = os.path.join(path, device, 'unrar%s') % sufix
+            if not filetools.exists(unrar): unrar = ''
+            if unrar:
+                if not xbmc.getCondVisibility("system.platform.windows"):
+                    try:
+                        if xbmc.getCondVisibility("system.platform.android"):
+                            # Para Android copiamos el binario a la partición del sistema
+                            unrar_org = unrar
+                            unrar = os.path.join(xbmc.translatePath('special://xbmc'), 'unrar')
+                            import xbmcvfs
+                            xbmcvfs.copy(unrar_org, unrar)
+                        command = ['chmod', '777', '%s' % unrar]
+                        p = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                        output_cmd, error_cmd = p.communicate()
+                    except:
+                        pass
+
+                try:
+                    p = subprocess.Popen(unrar, bufsize=0, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=creationflags)
+                    output_cmd, error_cmd = p.communicate()
+                    if p.returncode != 0:
+                        unrar = ''
+                        xbmc.log('######## UnRAR returncode for %s: %s' % (device, str(p.returncode)), xbmc.LOGNOTICE)
+                    else:
+                        xbmc.log('######## UnRAR OK en %s: %s' % (device, unrar), xbmc.LOGNOTICE)
+                        break
+                except:
+                    unrar = ''
+                    xbmc.log('######## UnRAR error en %s' % device, xbmc.LOGNOTICE)
+        
+        if unrar: config.set_setting("unrar_path", unrar, server="torrent")
+
+    if filetools.exists(os.path.join(config.get_runtime_path(), "custom_code.json")) and \
+                    config.get_setting("libtorrent_path", server="torrent", default="") :
+        return
+    
+    if xbmc.getCondVisibility("system.platform.android"):
+        LIBTORRENT_PATH = config.get_setting("libtorrent_path", server="torrent", default='')
+        LIBTORRENT_MSG = config.get_setting("libtorrent_msg", server="torrent", default='')
+        if '/data/app/' not in LIBTORRENT_PATH and not LIBTORRENT_MSG:
+            platformtools.dialog_notification('ALFA: Instalando Cliente Torrent interno', \
+                        'Puede solicitarle permisos de Superusuario', time=15000)
+            xbmc.log('### ALFA: Notificación enviada: Instalando Cliente Torrent interno', \
+                        xbmc.LOGNOTICE)
+            config.set_setting("libtorrent_msg", 'OK', server="torrent")
+
+    try:
+        from lib.python_libtorrent.python_libtorrent import get_libtorrent
+    except Exception, e:
+        logger.error(traceback.format_exc(1))
+        e = unicode(str(e), "utf8", errors="replace").encode("utf8")
+        config.set_setting("libtorrent_path", "", server="torrent")
+        if not config.get_setting("libtorrent_error", server="torrent", default=''):
+            config.set_setting("libtorrent_error", str(e), server="torrent")
+    
+    return
+    
+
+def verify_Kodi_video_DB():
+    logger.info()
+    import random
+    
+    platform = {}
+    path = ''
+    db_files = []
+    
+    try:
+        path = filetools.join(xbmc.translatePath("special://masterprofile/"), "Database")
+        if filetools.exists(path):
+            platform = config.get_platform(full_version=True)
+            if platform:
+                db_files = filetools.walk(path)
+                if filetools.exists(filetools.join(path, platform['video_db'])):
+                    for root, folders, files in db_files:
+                        for file in files:
+                            if file != platform['video_db']:
+                                if file.startswith('MyVideos'):
+                                    randnum = str(random.randrange(1, 999999))
+                                    filetools.rename(filetools.join(path, file), 'OLD_' + randnum +'_' + file)
+                                    logger.error('BD obsoleta: ' + file)
+                    
+                else:
+                    logger.error('Video_DB: ' + str(platform['video_db']) + ' para versión Kodi ' + str(platform['num_version']) + ' NO EXISTE. Analizar carpeta: ' + str(db_files))
+            else:
+                logger.error('Estructura de get_platform(full_version=True) incorrecta')
+        else:
+            logger.error('Path a Userdata/Database (' + path + ') no encontrado')
+        
+    except:
+        logger.error('Platform: ' + str(platform) + ' / Path: ' + str(path) + ' / Files: ' + str(db_files))
+        logger.error(traceback.format_exc())
+        
+    return

@@ -1249,6 +1249,10 @@ msgctxt "#60297"
 msgid "Find %s possible matches"
 msgstr "Encontrados %s posibles coincidencias"
 
+msgctxt "#60298"
+msgid "[%s]: Select the correct TV series"
+msgstr "[%s]: Selecciona la serie correcta"
+
 msgctxt "#60299"
 msgid "Not found in the language '%s'"
 msgstr "No se ha encontrado en idioma '%s'"
@@ -4722,10 +4726,6 @@ msgstr "Búsqueda en Youtube"
 msgctxt "#70508"
 msgid "Search in Abandomoviez"
 msgstr "Búsqueda en Abandomoviez"
-
-msgctxt "#70509"
-msgid "Search in Jayhap (Youtube, Vimeo & Dailymotion)"
-msgstr "Búsqueda en Jayhap (Youtube, Vimeo & Dailymotion)"
 
 msgctxt "#70510"
 msgid "Manual Search in Youtube"

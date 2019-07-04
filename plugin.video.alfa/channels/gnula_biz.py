@@ -4,7 +4,6 @@ import re
 import urlparse
 
 from core import httptools
-from core import jsontools
 from core import scrapertools
 from core import servertools
 from core import tmdb
@@ -484,9 +483,9 @@ def menu_info(item):
 
     id = scrapertools.find_single_match(item.url, '/(\d+)/')
 
-    data_trailer = httptools.downloadpage(host + "/media/trailer?idm=%s&mediaType=1" % id, ignore_response_code=True).data
+    data_trailer = httptools.downloadpage(host + "/media/trailer?idm=%s&mediaType=1" % id, ignore_response_code=True).json
     try:
-       trailer_url = jsontools.load(data_trailer)["video"]["url"]
+       trailer_url = data_trailer["video"]["url"]
        if trailer_url != "": item.infoLabels["trailer"] = trailer_url
     except:
        pass
@@ -535,9 +534,9 @@ def episodios(item):
     itemlist.reverse()
     if "episodios" not in item.extra and not item.path:
         id = scrapertools.find_single_match(item.url, '/(\d+)/')
-        data_trailer = httptools.downloadpage(host + "/media/trailer?idm=%s&mediaType=1" % id, ignore_response_code=True).data
+        data_trailer = httptools.downloadpage(host + "/media/trailer?idm=%s&mediaType=1" % id, ignore_response_code=True).json
         try:
-           trailer_url = jsontools.load(data_trailer)["video"]["url"]
+           trailer_url = data_trailer["video"]["url"]
            if trailer_url != "": item.infoLabels["trailer"] = trailer_url
         except:
            pass
@@ -603,12 +602,25 @@ def menu_info_episode(item):
 
     return itemlist
 
+def get_source(url, referer=None):
+    logger.info()
+    if referer is None:
+        data = httptools.downloadpage(url).data
+    else:
+        data = httptools.downloadpage(url, headers={'Referer':referer}).data
+    data = re.sub(r'\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
+
+    return data
+
 def findvideos(item):
     logger.info()
     itemlist = []
 
+    data = get_source(item.url)
+
+
     if not "|" in item.extra and not __menu_info__:
-        data = httptools.downloadpage(item.url, add_referer=True).data
+        data = httptools.downloadpage(item.url).data
 
         year = scrapertools.find_single_match(data, '<div class="media-summary">.*?release.*?>(\d+)<')
         if year != "" and not "tmdb_id" in item.infoLabels:
@@ -626,7 +638,7 @@ def findvideos(item):
     id = scrapertools.find_single_match(item.url, '/(\d+)/')
 
     if id == "":
-       data = httptools.downloadpage(item.url, add_referer=True).data
+       data = httptools.downloadpage(item.url).data
        id = scrapertools.find_single_match(str(data), 'data-idm="(.*?)"')
 
     if "|" in item.extra or not __menu_info__:
@@ -639,9 +651,9 @@ def findvideos(item):
         itemlist.extend(get_enlaces(item, url, "de Descarga"))
 
         if extra == "media":
-            data_trailer = httptools.downloadpage(host + "/media/trailer?idm=%s&mediaType=1" % id, ignore_response_code=True).data
+            data_trailer = httptools.downloadpage(host + "/media/trailer?idm=%s&mediaType=1" % id, ignore_response_code=True).json
             try:
-               trailer_url = jsontools.load(data_trailer)["video"]["url"]
+               trailer_url = data_trailer["video"]["url"]
                if trailer_url != "": item.infoLabels["trailer"] = trailer_url
             except:
                pass
@@ -691,10 +703,9 @@ def normalizar_url(url, server):
 def get_enlaces(item, url, type):
     itemlist = []
 
-    data = httptools.downloadpage(url, add_referer=True).data
-
+    data = httptools.downloadpage(url, headers={'referer':url}).data
     if type == "Online":
-        gg = httptools.downloadpage(item.url, add_referer=True).data
+        gg = httptools.downloadpage(item.url).data
         bloque = scrapertools.find_single_match(gg, 'class="tab".*?button show')
         patron = 'a href="#([^"]+)'
         patron += '.*?language-ES-medium ([^"]+)'
@@ -736,7 +747,7 @@ def play(item):
     itemlist = []
     if item.extra != "" and "google" not in item.url:
         post = "id=%s" % item.extra
-        data = httptools.downloadpage(host + "/goto/", post=post, add_referer=True).data
+        data = httptools.downloadpage(host + "/goto/", post=post).data
         item.url = scrapertools.find_single_match(data, 'document.location\s*=\s*"([^"]+)"')
 
     url = item.url.replace("http://miracine.tv/n/?etu=", "http://hqq.tv/player/embed_player.php?vid=")
@@ -748,6 +759,7 @@ def play(item):
     itemlist.append(item.clone(url=enlaces[1], server=enlaces[2]))
 
     return itemlist
+
 
 def newest(categoria):
     logger.info()

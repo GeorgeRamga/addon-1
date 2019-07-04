@@ -1,26 +1,68 @@
 # -*- coding: utf-8 -*-
 
-try:
-    from python_libtorrent import get_libtorrent, get_platform
-
-    lt = get_libtorrent()
-except Exception, e:
-    import libtorrent as lt
-
 import os
 import pickle
 import random
 import time
 import urllib
 
+try:
+    import xbmc, xbmcgui
+except:
+    pass
+from platformcode import config
+LIBTORRENT_PATH = config.get_setting("libtorrent_path", server="torrent", default='')
+try:
+    e = ''
+    e1 = ''
+    e2 = ''
+    pathname = ''
+    try:
+        import libtorrent as lt
+        pathname = LIBTORRENT_PATH
+    except Exception, e:
+        try:
+            import imp
+            from ctypes import CDLL
+            dll_path = os.path.join(LIBTORRENT_PATH, 'liblibtorrent.so')
+            liblibtorrent = CDLL(dll_path)
+            path_list = [LIBTORRENT_PATH, xbmc.translatePath('special://xbmc')]
+            fp, pathname, description = imp.find_module('libtorrent', path_list)
+            try:
+                lt = imp.load_module('libtorrent', fp, pathname, description)
+            finally:
+                if fp: fp.close()
+        
+        except Exception, e1:
+            xbmc.log(traceback.format_exc(), xbmc.LOGERROR)
+            from lib.python_libtorrent.python_libtorrent import get_libtorrent
+            lt = get_libtorrent()
+
+except Exception, e2:
+    try:
+        xbmc.log(traceback.format_exc(), xbmc.LOGERROR)
+        do = xbmcgui.Dialog()
+        e = e1 or e2
+        do.ok('ERROR en el cliente BT Libtorrent', 'Módulo no encontrado o imcompatible con el dispositivo.', 
+                    'Reporte el fallo adjuntando un "log".', str(e))
+    except:
+        pass
+
 from cache import Cache
 from dispatcher import Dispatcher
 from file import File
 from handler import Handler
 from monitor import Monitor
-from platformcode import logger
+from platformcode import logger, config
 from resume_data import ResumeData
 from server import Server
+
+try:
+    BUFFER = int(config.get_setting("bt_buffer", server="torrent", default="50"))
+except:
+    BUFFER = 50
+    config.set_setting("bt_buffer", "50", server="torrent")
+DOWNLOAD_PATH = config.get_setting("bt_download_path", server="torrent", default=config.get_setting("downloadpath"))
 
 
 class Client(object):
@@ -54,16 +96,26 @@ class Client(object):
         if temp_path:
             self.temp_path = temp_path
         else:
-            self.temp_path = os.path.join(os.path.dirname(__file__), "tmp")
+            self.temp_path = DOWNLOAD_PATH
         self.is_playing_fnc = is_playing_fnc
         self.timeout = timeout
         self.auto_delete = auto_delete
         self.wait_time = wait_time
         self.auto_shutdown = auto_shutdown
-        self.buffer_size = 15
+        self.buffer_size = BUFFER
         self.last_pieces_priorize = 5
         self.state_file = "state"
-        self.torrent_paramss = {'save_path': self.temp_path, 'storage_mode': lt.storage_mode_t.storage_mode_sparse}
+        try:
+            self.torrent_paramss = {'save_path': self.temp_path, 'storage_mode': lt.storage_mode_t.storage_mode_sparse}
+        except Exception, e:
+            try:
+                do = xbmcgui.Dialog()
+                e = e1 or e2
+                do.ok('ERROR en el cliente BT Libtorrent', 'Módulo no encontrado o imcompatible con el dispositivo.', 
+                            'Reporte el fallo adjuntando un "log".', str(e))
+            except:
+                pass
+            return
 
         # State
         self.has_meta = False
@@ -205,9 +257,9 @@ class Client(object):
         """
         Función encargada de descargar un archivo .torrent
         """
-        from core import scrapertools
+        from core import httptools
 
-        data = scrapertools.downloadpage(url)
+        data = httptools.downloadpage(url).data
         return data
 
     def start_url(self, uri):

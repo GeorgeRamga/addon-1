@@ -4,7 +4,7 @@
     "ignore_urls": [],
     "patterns": [
       {
-        "pattern": "(?:powvideo|povw1deo).(?:net|xyz|com)/(?:embed-|iframe-|preview-|)([a-z0-9]+)",
+        "pattern": "(?:powvideo|povw1deo).(?:net|xyz|com|cc)/(?:embed-|iframe-|preview-|)([a-z0-9]+)",
         "url": "http://powvideo.net/iframe-\\1-1536x701.html"
       }
     ]

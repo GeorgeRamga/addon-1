@@ -68,7 +68,7 @@ def categorias(item):
     logger.info()
     itemlist = []
     data = httptools.downloadpage(item.url).data
-    data = scrapertools.get_match(data,'<a>CATEGORÍAS</a>(.*?)</ul>')
+    data = scrapertools.find_single_match(data,'<a>CATEGORÍAS</a>(.*?)</ul>')
     patron  = '<a href="([^"]+)">([^"]+)</a>'
     matches = re.compile(patron,re.DOTALL).findall(data)
     for scrapedurl,scrapedtitle in matches:
@@ -142,18 +142,6 @@ def findvideos(item):
         itemlist.append(Item(channel=item.channel, action="add_pelicula_to_library", 
                              title='[COLOR yellow]Añadir esta pelicula a la videoteca[/COLOR]', url=item.url,
                              extra="findvideos", contentTitle=item.contentTitle))
-    return itemlist
-
-
-def play(item):
-    logger.info()
-    data = httptools.downloadpage(item.url).data
-    itemlist = servertools.find_video_items(data=data)
-    for videoitem in itemlist:
-        videoitem.title = item.fulltitle
-        videoitem.fulltitle = item.fulltitle
-        videoitem.thumbnail = item.thumbnail
-        videoitem.channel = item.channel
     return itemlist
 
 

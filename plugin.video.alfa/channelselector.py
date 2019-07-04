@@ -56,6 +56,11 @@ def getmainlist(view="thumb_"):
                          thumbnail=get_thumb(thumb_setting, view),
                          category=config.get_localized_string(30100), viewmode="list"))
 
+    if config.is_xbmc():
+        itemlist.append(Item(title="Reportar un fallo", channel="setting", action="report_menu",
+                         thumbnail=get_thumb("error.png", view),
+                         category=config.get_localized_string(30104), viewmode="list"))
+
     itemlist.append(Item(title=config.get_localized_string(30104) + " (" + config.get_localized_string(20000) +" " + config.get_addon_version(with_fix=False) + ")", channel="help", action="mainlist",
                          thumbnail=get_thumb("help.png", view),
                          category=config.get_localized_string(30104), viewmode="list"))
@@ -81,6 +86,11 @@ def getchanneltypes(view="thumb_"):
                          category=title, channel_type="all", thumbnail=get_thumb("channels_all.png", view),
                          viewmode="thumbnails"))
 
+    if config.get_setting('frequents') and config.get_setting('frequents_folder'):
+        itemlist.append(Item(title='Frecuentes', channel="channelselector", action="filterchannels", view=view,
+                             category='all', channel_type="freq", thumbnail=get_thumb("channels_frequents.png", view),
+                             viewmode="thumbnails"))
+
     for channel_type in channel_types:
         title = config.get_localized_category(channel_type)
         itemlist.append(Item(title=title, channel="channelselector", action="filterchannels", category=title,
@@ -97,8 +107,13 @@ def filterchannels(category, view="thumb_"):
     logger.info()
 
     channelslist = []
-
+    frequent_list = []
+    freq = False
+    if category == 'freq':
+        freq = True
+        category = 'all'
     # Si category = "allchannelstatus" es que estamos activando/desactivando canales
+    # Si category = "all-channels" viene del canal test
     appenddisabledchannels = False
     if category == "allchannelstatus":
         category = "all"
@@ -123,10 +138,6 @@ def filterchannels(category, view="thumb_"):
             channel_parameters = channeltools.get_channel_parameters(channel)
 
             if channel_parameters["channel"] == 'community':
-                continue
-
-            # si el canal no es compatible, no se muestra
-            if not channel_parameters["compatible"]:
                 continue
 
             # Si no es un canal lo saltamos
@@ -159,7 +170,8 @@ def filterchannels(category, view="thumb_"):
 
             # Se salta el canal para adultos si el modo adultos está desactivado
             if channel_parameters["adult"] and config.get_setting("adult_mode") == 0:
-                continue
+                if category <> "all_channels":
+                    continue
 
             # Se salta el canal si está en un idioma filtrado
             # Se muestran todos los canales si se elige "all" en el filtrado de idioma
@@ -167,11 +179,13 @@ def filterchannels(category, view="thumb_"):
             # Los canales de adultos se mostrarán siempre que estén activos
             if channel_language != "all" and channel_language not in channel_parameters["language"] \
                     and "*" not in channel_parameters["language"]:
-                continue
+                if category <> "all_channels":
+                    continue
 
             # Se salta el canal si está en una categoria filtrado
             if category != "all" and category not in channel_parameters["categories"]:
-                continue
+                if category <> "all_channels":
+                    continue
 
             # Si tiene configuración añadimos un item en el contexto
             context = []
@@ -181,17 +195,43 @@ def filterchannels(category, view="thumb_"):
 
             channel_info = set_channel_info(channel_parameters)
             # Si ha llegado hasta aquí, lo añade
+            frequency = channeltools.get_channel_setting("frequency", channel_parameters["channel"], 0)
             channelslist.append(Item(title=channel_parameters["title"], channel=channel_parameters["channel"],
                                      action="mainlist", thumbnail=channel_parameters["thumbnail"],
                                      fanart=channel_parameters["fanart"], plot=channel_info, category=channel_parameters["title"],
-                                     language=channel_parameters["language"], viewmode="list", context=context))
+                                     language=channel_parameters["language"], viewmode="list", context=context, frequency=frequency))
 
         except:
             logger.error("Se ha producido un error al leer los datos del canal '%s'" % channel)
             import traceback
             logger.error(traceback.format_exc())
 
+
+    if config.get_setting('frequents'):
+        for ch in channelslist:
+            if int(ch.frequency) != 0:
+                frequent_list.append(ch)
+
+        frequent_list = sorted(frequent_list, key=lambda item: item.frequency, reverse=True)
+
+        if freq:
+            return frequent_list
+
+        max_freq = config.get_setting("max_frequents")
+        if frequent_list:
+            if len(frequent_list) >= max_freq:
+                max_freq = max_freq
+            else:
+                max_freq = len(frequent_list)
+            frequent_list = frequent_list[0:max_freq]
+            frequent_list.insert(0, Item(title='- Canales frecuentes -', action=''))
+
+            frequent_list.append(Item(title='- Todos los canales -', action=''))
+
     channelslist.sort(key=lambda item: item.title.lower().strip())
+
+
+
 
     if category == "all":
         channel_parameters = channeltools.get_channel_parameters('url')
@@ -201,6 +241,9 @@ def filterchannels(category, view="thumb_"):
 
         channelslist.insert(0, Item(title=config.get_localized_string(60088), action="mainlist", channel="url",
                                     thumbnail=channel_parameters["thumbnail"], type="generic", viewmode="list"))
+
+    if frequent_list and config.get_setting('frequents'):
+        channelslist =  frequent_list + channelslist
 
     if category in ['movie', 'tvshow']:
         titles = [config.get_localized_string(70028), config.get_localized_string(30985), config.get_localized_string(70559), config.get_localized_string(60264), config.get_localized_string(70560)]

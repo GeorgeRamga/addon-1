@@ -23,7 +23,7 @@ list_servers = [
     'filescdn',
     'uptobox',
     'okru',
-    'nowvideo',
+    'fembed',
     'userscloud',
     'pcloud',
     'usersfiles',
@@ -265,7 +265,7 @@ def findvideos(item):
                 "http://thevideos.tv/": "thevideos",
                 "http://ul.to/": "uploadedto",
                 "http://turbobit.net/": "turbobit",
-                "http://www.cinecalidad.com/protect/v.html?i=": "cinecalidad",
+                "http://www.cinecalidad.to/protect/v.html?i=": "cinecalidad",
                 "http://www.mediafire.com/download/": "mediafire",
                 "https://www.youtube.com/watch?v=": "youtube",
                 "http://thevideos.tv/embed-": "thevideos",
@@ -306,13 +306,14 @@ def findvideos(item):
                   'TVM': 'https://thevideo.me/embed-',
                   'Streamango': 'https://streamango.com/embed/',
                   'RapidVideo': 'https://www.rapidvideo.com/embed/',
-                  'Trailer': '',
+                  'Trailer': 'https://www.youtube.com/embed/',
                   'BitTorrent': '',
-                  'Mega': '',
-                  'MediaFire': ''}
+                  'Mega': 'https://mega.nz/#!',
+                  'MediaFire': '',
+                  'Fembed': 'https://www.fembed.com/v/'}
     dec_value = scrapertools.find_single_match(data, 'String\.fromCharCode\(parseInt\(str\[i\]\)-(\d+)\)')
-
-    torrent_link = scrapertools.find_single_match(data, '<a href="/protect/v\.php\?i=([^"]+)"')
+    torrent_link = scrapertools.find_single_match(data, '<a href=".*?/protect/v\.php\?i=([^"]+)"')
+    subs = scrapertools.find_single_match(data, '<a id=subsforlink href=(.*?) ')
     if torrent_link != '':
         import urllib
         base_url = '%s/protect/v.php' % host
@@ -340,7 +341,7 @@ def findvideos(item):
         itemlist.append(new_item)
 
     for video_cod, server_id in matches:
-        if server_id not in ['Mega', 'MediaFire', 'Trailer', '']:
+        if server_id not in ['MediaFire', 'TVM'] or server.lower() not in duplicados:
             video_id = dec(video_cod, dec_value)
 
         if server_id in server_url:
@@ -351,13 +352,14 @@ def findvideos(item):
                 url = server_url[server_id] + video_id + '.html'
             else:
                 url = server_url[server_id] + video_id
+        
         title = item.contentTitle + ' (%s)' % server
         quality = 'default'
 
-        if server_id not in ['Mega', 'MediaFire', 'Trailer']:
+        if server_id not in ['MediaFire', 'TVM']:
 
             language = [IDIOMAS[lang], 'vose']
-            if url not in duplicados:
+            if server not in duplicados:
                 new_item = Item(channel=item.channel,
                                 action='play',
                                 title=title,
@@ -366,10 +368,11 @@ def findvideos(item):
                                 language= language,
                                 thumbnail=thumbnail,
                                 quality=quality,
-                                server=server
+                                server=server,
+                                subtitle=subs
                                 )
                 itemlist.append(new_item)
-                duplicados.append(url)
+                duplicados.append(server)
 
     # Requerido para FilterTools
 
@@ -394,15 +397,13 @@ def findvideos(item):
 
 
 def get_urls(item, link):
-    from core import jsontools
     logger.info()
     url = 'http://www.cinecalidad.to/ccstream/ccstream.php'
     headers = dict()
     headers["Referer"] = item.url
     post = 'link=%s' % link
 
-    data = httptools.downloadpage(url, post=post, headers=headers).data
-    dict_data = jsontools.load(data)
+    dict_data = httptools.downloadpage(url, post=post, headers=headers).json
     return dict_data['link']
 
 
@@ -417,6 +418,7 @@ def play(item):
             videoitem.fulltitle = item.fulltitle
             videoitem.thumbnail = item.thumbnail
             videoitem.channel = item.channel
+            videoitem.subtitle = item.subtitle
     else:
         itemlist.append(item)
 
@@ -429,13 +431,13 @@ def newest(categoria):
     item = Item()
     try:
         if categoria in ['peliculas','latino']:
-            item.url = 'http://www.cinecalidad.com'
+            item.url = 'http://www.cinecalidad.to'
         elif categoria == 'infantiles':
-            item.url = 'http://www.cinecalidad.com/genero-peliculas/infantil/'
+            item.url = 'http://www.cinecalidad.to/genero-peliculas/infantil/'
         elif categoria == 'terror':
-            item.url = 'http://www.cinecalidad.com/genero-peliculas/terror/'
+            item.url = 'http://www.cinecalidad.to/genero-peliculas/terror/'
         elif categoria == 'castellano':
-            item.url = 'http://www.cinecalidad.com/espana/'
+            item.url = 'http://www.cinecalidad.to/espana/'
         itemlist = peliculas(item)
         if itemlist[-1].title == 'Página siguiente >>':
             itemlist.pop()

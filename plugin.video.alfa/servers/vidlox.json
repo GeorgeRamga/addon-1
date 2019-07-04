@@ -4,8 +4,8 @@
     "ignore_urls": [],
     "patterns": [
       {
-        "pattern": "(?i)(https://vidlox.(?:tv|me)/embed-.*?.html)",
-        "url": "\\1"
+        "pattern": "vidlox.(?:tv|me)/(?:embed-|)([A-z0-9]+)",
+        "url": "https://vidlox.me/embed-\\1.html"
       }
     ]
   },

@@ -7,7 +7,6 @@ import re
 import urllib
 from channelselector import get_thumb
 from core import httptools
-from core import jsontools
 from core import scrapertools
 from core import servertools
 from core import tmdb
@@ -33,7 +32,7 @@ list_servers = [
 __comprueba_enlaces__ = config.get_setting('comprueba_enlaces', 'poseidonhd')
 __comprueba_enlaces_num__ = config.get_setting('comprueba_enlaces_num', 'poseidonhd')
 
-host = 'https://poseidonhd.com/'
+host = 'https://poseidonhd.co/'
 
 def mainlist(item):
     logger.info()
@@ -71,7 +70,7 @@ def menu_movies(item):
 def get_source(url):
     logger.info()
     data = httptools.downloadpage(url).data
-    data = re.sub(r'"|\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
+    data = re.sub(r'\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
     return data
 
 
@@ -94,11 +93,11 @@ def section(item):
     data = get_source(host)
 
     if 'Genero' in item.title:
-        patron = '<li class=cat-item cat-item-\d+><a href=(.*?) >(.*?)/i>'
+        patron = '<li class="cat-item cat-item-\d+"><a href="([^"]+)">(.*?)/i>'
     elif 'Año' in item.title:
-        patron = '<li><a href=(.*?release.*?)>(.*?)</a>'
+        patron = '<li><a href="(.*?release.*?)">(.*?)</a>'
     elif 'Calidad' in item.title:
-        patron = 'menu-item-object-dtquality menu-item-\d+><a href=(.*?)>(.*?)</a>'
+        patron = 'menu-item-object-dtquality menu-item-\d+"><a href="([^"]+)">(.*?)</a>'
 
     matches = re.compile(patron, re.DOTALL).findall(data)
 
@@ -125,10 +124,10 @@ def list_all(item):
     itemlist = []
 
     data = get_source(item.url)
-
     if item.type ==  'movies':
-        patron = '<article id=post-\d+ class=item movies><div class=poster><img src=(.*?) alt=(.*?)>.*?quality>(.*?)'
-        patron += '</span><\/div><a href=(.*?)>.*?<\/h3><span>(.*?)<\/span><\/div>.*?flags(.*?)metadata'
+        patron = '<article id="post-\d+" class="item movies"><div class="poster"><img src="([^"]+)" alt="([^"]+)">.*?'
+        patron += 'quality">([^<]+)</span> <\/div><a href="([^"]+)">.*?'
+        patron += '<\/h3><span>([^>]+)<\/span><\/div>.*?flags(.*?)metadata'
         matches = re.compile(patron, re.DOTALL).findall(data)
 
         for scrapedthumbnail, scrapedtitle, quality, scrapedurl, year, lang_data in matches:
@@ -150,8 +149,8 @@ def list_all(item):
                             infoLabels={'year':year}))
 
     elif item.type ==  'tvshows':
-        patron = '<article id=post-\d+ class=item tvshows><div class=poster><img src=(.*?) alt=(.*?)>.*?'
-        patron += '<a href=(.*?)>.*?<\/h3><span>(.*?)<\/span><\/div>'
+        patron = '<article id="post-\d+" class="item tvshows"><div class="poster"><img src="([^"]+)" alt="([^"]+)">.*?'
+        patron += '<a href="([^"]+)">.*?<\/h3><span>([^<]+)<\/span><\/div>'
         matches = re.compile(patron, re.DOTALL).findall(data)
 
         for scrapedthumbnail, scrapedtitle, scrapedurl, year in matches:
@@ -170,7 +169,7 @@ def list_all(item):
     tmdb.set_infoLabels(itemlist, seekTmdb=True)
     #  Paginación
 
-    url_next_page = scrapertools.find_single_match(data,"<a class='arrow_pag' href=([^>]+)><i id='nextpagination'")
+    url_next_page = scrapertools.find_single_match(data, '<link rel="next" href="([^"]+)" />')
     if url_next_page:
         itemlist.append(item.clone(title="Siguiente >>", url=url_next_page, action='list_all'))
 
@@ -182,7 +181,7 @@ def seasons(item):
     itemlist=[]
 
     data=get_source(item.url)
-    patron='Temporada\d+'
+    patron='Temporada \d+'
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     infoLabels = item.infoLabels
@@ -216,7 +215,7 @@ def episodesxseasons(item):
     itemlist = []
 
     data=get_source(item.url)
-    patron='class=numerando>%s - (\d+)</div><div class=episodiotitle><a href=(.*?)>(.*?)<' % item.infoLabels['season']
+    patron='class="numerando">%s - (\d+)</div><div class="episodiotitle"><a href="([^"]+)">(.*?)<' % item.infoLabels['season']
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     infoLabels = item.infoLabels
@@ -239,13 +238,13 @@ def findvideos(item):
 
     itemlist = []
     data = get_source(item.url)
-    selector_url = scrapertools.find_multiple_matches(data, 'class=metaframe rptss src=(.*?) frameborder=0 ')
+    selector_url = scrapertools.find_multiple_matches(data, 'class="metaframe rptss" src="([^"]+)"')
 
     for lang in selector_url:
         data = get_source('https:'+lang)
-        urls = scrapertools.find_multiple_matches(data, 'data-playerid=(.*?)>')
+        urls = scrapertools.find_multiple_matches(data, 'data-playerid="([^"]+)">')
         subs = ''
-        lang = scrapertools.find_single_match(lang, 'lang=([^+]+)')
+        lang = scrapertools.find_single_match(lang, 'lang=(.*)?')
         language = IDIOMAS[lang]
 
         if item.contentType == 'episode':
@@ -263,9 +262,8 @@ def findvideos(item):
                     file_id = scrapertools.find_single_match(url, 'file=(.*?)&')
                     post = {'link': file_id}
                     post = urllib.urlencode(post)
-                    hidden_url = 'https://streamango.poseidonhd.io/repro/plugins/gkpluginsphp.php'
-                    data_url = httptools.downloadpage(hidden_url, post=post).data
-                    dict_vip_url = jsontools.load(data_url)
+                    hidden_url = 'https://streamango.poseidonhd.co/repro/plugins/gkpluginsphp.php'
+                    dict_vip_url = httptools.downloadpage(hidden_url, post=post).json
                     url = dict_vip_url['link']
                 except:
                     pass
@@ -276,16 +274,19 @@ def findvideos(item):
                         file_id = scrapertools.find_single_match(url, 'h=(\w+)')
                         post = {'h': file_id}
                         post = urllib.urlencode(post)
-                        hidden_url = 'https://streamango.poseidonhd.io/repro/openload/api.php'
-                        data_url = httptools.downloadpage(hidden_url, post=post, follow_redirects=False).data
-                        json_data = jsontools.load(data_url)
-                        url = json_data['url']
+                        hidden_url = 'https://streamango.poseidonhd.co/repro/openload/api.php'
+                        json_data = httptools.downloadpage(hidden_url, post=post, follow_redirects=False).json
+                        url = scrapertools.find_single_match(data_url, "VALUES \('[^']+','([^']+)'")
+                        if not url:
+                            url = json_data['url']
+                        if not url:
+                            continue
                     else:
                         new_data = httptools.downloadpage('https:'+url).data
                         file_id = scrapertools.find_single_match(new_data, 'value="([^"]+)"')
                         post = {'url': file_id}
                         post = urllib.urlencode(post)
-                        hidden_url = 'https://streamango.poseidonhd.io/repro/r.php'
+                        hidden_url = 'https://streamango.poseidonhd.co/repro/r.php'
                         data_url = httptools.downloadpage(hidden_url, post=post, follow_redirects=False)
                         url = data_url.headers['location']
                 except:
@@ -335,7 +336,7 @@ def search_results(item):
     itemlist=[]
 
     data=get_source(item.url)
-    patron = '<article>.*?<a href=(.*?)><img src=(.*?) alt=(.*?) />.*?meta.*?year>(.*?)<(.*?)<p>(.*?)</p>'
+    patron = '<article>.*?<a href="([^"]+)"><img src="([^"]+)" alt="([^"]+)" />.*?meta.*?year">([^<]+)<(.*?)<p>(.*?)</p>'
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for scrapedurl, scrapedthumb, scrapedtitle, year, lang_data, scrapedplot in matches:

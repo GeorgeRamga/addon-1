@@ -16,7 +16,7 @@ def mainlist(item):
     logger.info("")
     itemlist = []
     itemlist.append( Item(channel=item.channel, title="Videos" , action="lista", url=host + "/category/clips-scenes"))
-    itemlist.append( Item(channel=item.channel, title="Peliculas" , action="lista", url=host + "/movies"))
+    itemlist.append( Item(channel=item.channel, title="Peliculas" , action="lista", url=host))
     itemlist.append( Item(channel=item.channel, title="Parodia" , action="lista", url=host + "/category/parodies-hd"))
     itemlist.append( Item(channel=item.channel, title="Canal" , action="categorias", url=host))
     itemlist.append( Item(channel=item.channel, title="Año" , action="categorias", url=host))
@@ -43,11 +43,11 @@ def categorias(item):
     itemlist = []
     data = httptools.downloadpage(item.url).data
     if item.title == "Canal":
-        data = scrapertools.get_match(data,'>Studios</a>(.*?)</ul>')
+        data = scrapertools.find_single_match(data,'>Studios</a>(.*?)</ul>')
     if item.title == "Año":
-        data = scrapertools.get_match(data,'>Years</a>(.*?)</ul>')
+        data = scrapertools.find_single_match(data,'>Years</a>(.*?)</ul>')
     if item.title == "Categorias":
-        data = scrapertools.get_match(data,'>XXX Genres</div>(.*?)</ul>')
+        data = scrapertools.find_single_match(data,'>XXX Genres</div>(.*?)</ul>')
     patron  = '<a href="([^"]+)".*?>([^"]+)</a>(.*?)</li>'
     matches = re.compile(patron,re.DOTALL).findall(data)
     for scrapedurl,scrapedtitle,cantidad  in matches:

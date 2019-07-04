@@ -3,14 +3,28 @@
 # Service for updating new episodes on library series
 # ------------------------------------------------------------
 
-import datetime, imp, math, threading, traceback
+import datetime, imp, math, threading, traceback, sys
+
+
+
+from platformcode import config
+try:
+    import xbmc, os
+    librerias = xbmc.translatePath(os.path.join(config.get_runtime_path(), 'lib'))
+    sys.path.append(librerias)
+except:
+    import os
+    librerias = os.path.join(config.get_runtime_path(), 'lib')
+    sys.path.append(librerias)
+
+
+
 
 from core import channeltools, filetools, videolibrarytools
-from platformcode import config, logger
+from platformcode import logger
 from platformcode import platformtools
 from channels import videolibrary
 from lib import generictools
-
 
 
 def update(path, p_dialog, i, t, serie, overwrite):
@@ -28,6 +42,9 @@ def update(path, p_dialog, i, t, serie, overwrite):
         ###### Redirección al canal NewPct1.py si es un clone, o a otro canal y url si ha intervención judicial
         try:
             head_nfo, it = videolibrarytools.read_nfo(path + '/tvshow.nfo')         #Refresca el .nfo para recoger actualizaciones
+            if not it:
+                logger.error('.nfo erroneo en ' + str(path))
+                continue
             if it.emergency_urls:
                 serie.emergency_urls = it.emergency_urls
             serie.category = category
@@ -120,6 +137,9 @@ def check_for_update(overwrite=True):
 
             for i, tvshow_file in enumerate(show_list):
                 head_nfo, serie = videolibrarytools.read_nfo(tvshow_file)
+                if not serie:
+                    logger.error('.nfo erroneo en ' + str(tvshow_file))
+                    continue
                 path = filetools.dirname(tvshow_file)
                 
                 ###### Redirección al canal NewPct1.py si es un clone, o a otro canal y url si ha intervención judicial
@@ -213,12 +233,13 @@ def check_for_update(overwrite=True):
                     update_last = hoy
                     update_next = hoy + datetime.timedelta(days=interval)
 
-                head_nfo, serie = videolibrarytools.read_nfo(tvshow_file)                       #Vuelve a leer el.nfo, que ha sido modificado
+                head_nfo, serie = videolibrarytools.read_nfo(tvshow_file)       #Vuelve a leer el.nfo, que ha sido modificado
                 if interval != int(serie.active) or update_next.strftime('%Y-%m-%d') != serie.update_next or update_last.strftime('%Y-%m-%d') != serie.update_last:
                     serie.update_last = update_last.strftime('%Y-%m-%d')
                     if update_next > hoy:
                         serie.update_next = update_next.strftime('%Y-%m-%d')
-                    serie.active = interval
+                    if serie.infoLabels["status"] != "Ended":
+                        serie.active = interval
                     serie.channel = "videolibrary"
                     serie.action = "get_seasons"
                     filetools.write(tvshow_file, head_nfo + serie.tojson())
@@ -232,8 +253,8 @@ def check_for_update(overwrite=True):
                     else:
                         update_when_finished = True
 
-            if estado_verify_playcount_series:                                                  #Si se ha cambiado algún playcount, ...
-                estado = config.set_setting("verify_playcount", True, "videolibrary")           #... actualizamos la opción de Videolibrary
+            if estado_verify_playcount_series:                                      #Si se ha cambiado algún playcount, ...
+                estado = config.set_setting("verify_playcount", True, "videolibrary")   #... actualizamos la opción de Videolibrary
             
             if config.get_setting("search_new_content", "videolibrary") == 1 and update_when_finished:
                 # Actualizamos la videoteca de Kodi: Buscar contenido en todas las series
@@ -332,13 +353,21 @@ if __name__ == "__main__":
     # Verificar quick-fixes al abrirse Kodi, y dejarlo corriendo como Thread
     from platformcode import updater
     updater.check_addon_init()
-    
+
     # Copia Custom code a las carpetas de Alfa desde la zona de Userdata
     from platformcode import custom_code
     custom_code.init()
+
+    # Identifica la dirección Proxy y la lista de alternativas
+    from core import proxytools
+    proxytools.get_proxy_list()
     
     if not config.get_setting("update", "videolibrary") == 2:
         check_for_update(overwrite=False)
+    
+    # Añade al LOG las variables de entorno necesarias para diagnóstico
+    from platformcode import envtal
+    envtal.list_env()
 
     # Se ejecuta ciclicamente
     if config.get_platform(True)['num_version'] >= 14:
