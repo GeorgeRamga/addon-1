@@ -1,7 +1,20 @@
 # -*- coding: utf-8 -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+if PY3:
+    #from future import standard_library
+    #standard_library.install_aliases()
+    import urllib.parse as urllib                               # Es muy lento en PY2.  En PY3 es nativo
+else:
+    import urllib                                               # Usamos el nativo de PY2 que es más rápido
+
+from builtins import chr
+from builtins import range
+
 import re
-import urllib, random, base64
 
 from core import httptools
 from core import jsontools
@@ -11,6 +24,8 @@ from platformcode import logger
 
 def test_video_exists(page_url):
     logger.info("(page_url='%s')" % page_url)
+    #Deshabilitamos el server hasta nueva orden
+    return False, "[netutv] Servidor deshabilitado"
     # http://netu.tv/watch_video.php=XX solo contiene una redireccion, ir directamente a http://hqq.tv/player/embed_player.php?vid=XX
     page_url = page_url.replace("/watch_video.php?v=", "/player/embed_player.php?vid=")
     data = httptools.downloadpage(page_url).data

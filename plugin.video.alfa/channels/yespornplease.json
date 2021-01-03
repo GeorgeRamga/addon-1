@@ -1,22 +1,14 @@
 {
   "id": "yespornplease",
   "name": "YesPornPlease",
-  "active": true,
+  "active": false,
   "adult": true,
   "language": ["*"],
-  "thumbnail": "yespornplease.png",
+  "thumbnail": "https://i.postimg.cc/Jt9ZBs8B/yespornplease.png",
   "banner": "yespornplease.png",
   "categories": [
     "adult"
   ],
   "settings": [
-    {
-      "id": "include_in_global_search",
-      "type": "bool",
-      "label": "Incluir en busqueda global",
-      "default": true,
-      "enabled": true,
-      "visible": true
-    }
   ]
 }

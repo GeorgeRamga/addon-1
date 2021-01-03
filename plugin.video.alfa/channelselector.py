@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 
+from builtins import range
+
 import glob
 import os
 
@@ -62,8 +64,30 @@ def getmainlist(view="thumb_"):
                          category=config.get_localized_string(30104), viewmode="list"))
 
     itemlist.append(Item(title=config.get_localized_string(30104) + " (" + config.get_localized_string(20000) +" " + config.get_addon_version(with_fix=False) + ")", channel="help", action="mainlist",
-                         thumbnail=get_thumb("help.png", view),
+                         thumbnail=os.path.join(config.get_runtime_path(), "resources", 'Screenshot.jpg'),
                          category=config.get_localized_string(30104), viewmode="list"))
+
+    from lib import generictools
+    browser, res = generictools.call_browser('', lookup=True)
+    if not browser:
+        action = ''
+        itemlist.append(Item(channel="setting", action=action, url='https://alfa-addon.com/foros/tutoriales.11/', 
+                         title="Tutoriales relevantes [COLOR gold](Instala un browser externo: Chrome, Firefox, Opera)[/COLOR]:", 
+                         thumbnail=get_thumb("help.png", view), unify=False, folder=False, 
+                         category=config.get_localized_string(30104), viewmode="list"))
+    else:
+        action = 'call_browser'
+        itemlist.append(Item(channel="setting", action=action, url='https://alfa-addon.com/foros/tutoriales.11/', 
+                         title="Tutoriales relevantes [COLOR limegreen](pincha para usar [I]%s[/I])[/COLOR]:" % browser, 
+                         thumbnail=get_thumb("help.png", view), unify=False, folder=False, 
+                         category=config.get_localized_string(30104), viewmode="list"))
+                         
+    itemlist.append(Item(channel="setting", action=action, url='https://alfa-addon.com/threads/manual-de-alfa-mobile-assistant-herramienta-de-apoyo.3797/', 
+                         title="-     [COLOR yellow]Manual de Alfa Mobile Assistant (herramienta de apoyo)[/COLOR]   " + 
+                         "https://alfa-addon.com/threads/manual-de-alfa-mobile-assistant-herramienta-de-apoyo.3797/", 
+                         thumbnail=get_thumb("help.png", view), unify=False, folder=False, 
+                         category=config.get_localized_string(30104), viewmode="list"))
+
     return itemlist
 
 
@@ -71,7 +95,7 @@ def getchanneltypes(view="thumb_"):
     logger.info()
 
     # Lista de categorias
-    channel_types = ["movie", "tvshow", "anime", "documentary", "vos", "direct", "torrent"]
+    channel_types = ["movie", "tvshow", "anime", "documentary", "vos", "direct", "torrent", "sport"]
 
     if config.get_setting("adult_mode") != 0:
         channel_types.append("adult")
@@ -86,7 +110,7 @@ def getchanneltypes(view="thumb_"):
                          category=title, channel_type="all", thumbnail=get_thumb("channels_all.png", view),
                          viewmode="thumbnails"))
 
-    if config.get_setting('frequents') and config.get_setting('frequents_folder'):
+    if config.get_setting('frequents_folder'):
         itemlist.append(Item(title='Frecuentes', channel="channelselector", action="filterchannels", view=view,
                              category='all', channel_type="freq", thumbnail=get_thumb("channels_frequents.png", view),
                              viewmode="thumbnails"))
@@ -170,7 +194,7 @@ def filterchannels(category, view="thumb_"):
 
             # Se salta el canal para adultos si el modo adultos está desactivado
             if channel_parameters["adult"] and config.get_setting("adult_mode") == 0:
-                if category <> "all_channels":
+                if category != "all_channels":
                     continue
 
             # Se salta el canal si está en un idioma filtrado
@@ -179,12 +203,12 @@ def filterchannels(category, view="thumb_"):
             # Los canales de adultos se mostrarán siempre que estén activos
             if channel_language != "all" and channel_language not in channel_parameters["language"] \
                     and "*" not in channel_parameters["language"]:
-                if category <> "all_channels":
+                if category != "all_channels":
                     continue
 
             # Se salta el canal si está en una categoria filtrado
             if category != "all" and category not in channel_parameters["categories"]:
-                if category <> "all_channels":
+                if category != "all_channels":
                     continue
 
             # Si tiene configuración añadimos un item en el contexto
@@ -206,7 +230,6 @@ def filterchannels(category, view="thumb_"):
             import traceback
             logger.error(traceback.format_exc())
 
-
     if config.get_setting('frequents'):
         for ch in channelslist:
             if int(ch.frequency) != 0:
@@ -215,7 +238,11 @@ def filterchannels(category, view="thumb_"):
         frequent_list = sorted(frequent_list, key=lambda item: item.frequency, reverse=True)
 
         if freq:
-            return frequent_list
+            max_ff = config.get_setting("max_frequents_folder")
+            if max_ff > 0:
+                return frequent_list[0:max_ff]
+            else:
+                return frequent_list
 
         max_freq = config.get_setting("max_frequents")
         if frequent_list:
@@ -228,10 +255,21 @@ def filterchannels(category, view="thumb_"):
 
             frequent_list.append(Item(title='- Todos los canales -', action=''))
 
+    elif freq:
+        for ch in channelslist:
+            if int(ch.frequency) != 0:
+                frequent_list.append(ch)
+
+        frequent_list = sorted(frequent_list, key=lambda item: item.frequency, reverse=True)
+
+        max_ff = config.get_setting("max_frequents_folder")
+        if max_ff > 0:
+            return frequent_list[0:max_ff]
+        else:
+            return frequent_list
+
+
     channelslist.sort(key=lambda item: item.title.lower().strip())
-
-
-
 
     if category == "all":
         channel_parameters = channeltools.get_channel_parameters('url')
@@ -250,18 +288,37 @@ def filterchannels(category, view="thumb_"):
         ids = ['popular', 'top_rated', 'now_playing', 'on_the_air']
         for x in range(0,3):
             if x == 2 and category != 'movie':
-                title=titles[x+1]
+                title = titles[x+1]
                 id = ids[x+1]
             else:
-                title=titles[x]
+                title = titles[x]
                 id = ids[x]
             channelslist.insert(x,
                 Item(channel='search', action='discover_list', title=title, search_type='list',
-                     list_type='%s/%s' % (category.replace('show',''), id), thumbnail=get_thumb(id+".png")))
+                     list_type='%s/%s' % (category.replace('show',''), id), thumbnail=get_thumb(id+".png"),
+                     mode=category))
 
-        channelslist.insert(3, Item(channel='search', action='genres_menu', title='Generos',
-                                    type=category.replace('show',''), thumbnail=get_thumb("genres.png")))
+        channelslist.insert(3, Item(channel='search', action='years_menu', title='Por Años',
+                                    type=category.replace('show', ''), thumbnail=get_thumb("years.png"),
+                                    mode=category))
 
+        channelslist.insert(4, Item(channel='search', action='genres_menu', title='Generos',
+                                    type=category.replace('show',''), thumbnail=get_thumb("genres.png"),
+                                    mode=category))
+
+    ### Especiales (Halloween, otros)
+    from datetime import date
+
+    today = date.today()
+
+    if today.month == 10 and category == "movie":
+        this_year = today.year
+        from_date = "%s-01-01" % this_year
+        discovery = {"url": "discover/movie", "with_genres": "27", "primary_release_date.lte": "%s" % today,
+                     "primary_release_date.gte": from_date, "page": "1"}
+
+        channelslist.insert(0, Item(channel="search", title="Halloween %s" % this_year, page=1, action='discover_list',
+                                    discovery=discovery, mode="movie", thumbnail=get_thumb("channels_horror.png")))
     return channelslist
 
 

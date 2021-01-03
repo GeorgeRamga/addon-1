@@ -3,6 +3,10 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
 import re
 
 from channels import autoplay
@@ -18,7 +22,7 @@ from channelselector import get_thumb
 host = 'http://seriesblanco.org/'
 
 IDIOMAS = {'es': 'Cast', 'la': 'Lat', 'vos': 'VOSE', 'vo': 'VO'}
-list_language = IDIOMAS.values()
+list_language = list(IDIOMAS.values())
 list_quality = ['SD', 'Micro-HD-720p', '720p', 'HDitunes', 'Micro-HD-1080p' ]
 list_servers = ['powvideo','yourupload', 'openload', 'gamovideo', 'flashx', 'clipwatching', 'streamango', 'streamcloud']
 
@@ -280,7 +284,7 @@ def new_episodes(item):
                              thumbnail=thumbnail,
                              language=language,
                               ))
-        tmdb.set_infoLabels_itemlist(itemlist, seekTmdb=True)
+    tmdb.set_infoLabels_itemlist(itemlist, seekTmdb=True)
 
     return itemlist
 
@@ -298,14 +302,15 @@ def new_series(item):
 
         url =scrapedurl
         thumbnail = scrapedthumbnail
+        title = scrapedtitle.capitalize()
         itemlist.append(Item(channel=item.channel,
                              action='seasons',
-                             title=scrapedtitle,
+                             title=title,
                              url=url,
                              contentSerieName=scrapedtitle,
                              thumbnail=thumbnail
                               ))
-        tmdb.set_infoLabels_itemlist(itemlist, seekTmdb=True)
+    tmdb.set_infoLabels_itemlist(itemlist, seekTmdb=True)
 
     return itemlist
 
@@ -336,7 +341,7 @@ def findvideos(item):
     itemlist = []
 
     data = get_source(item.url)
-    patron = '<imgsrc="([^"]+)".*?<a class="open-link" data-enlace="([^"]+)".*?<td>([^<]+)</td>'
+    patron = '<imgsrc="([^"]+)".*?data-enlace="([^"]+)".*?<td>([^<]+)</td>'
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for lang_data, scrapedurl, quality in matches:

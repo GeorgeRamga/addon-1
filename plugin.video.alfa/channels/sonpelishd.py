@@ -3,7 +3,17 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+if PY3:
+    import urllib.parse as urllib                                               # Es muy lento en PY2.  En PY3 es nativo
+else:
+    import urllib                                                               # Usamos el nativo de PY2 que es más rápido
+
 import re
+import base64
 
 from core import httptools
 from core import scrapertools
@@ -148,30 +158,32 @@ def seccion(item):
 
 def findvideos(item):
     logger.info()
-    url_list = []
-    itemlist = []
-    duplicados = []
-    data = get_source(item.url)
-    src = data
-    patron = '<iframe.*?src=(.*?) scrolling'
-    matches = re.compile(patron, re.DOTALL).findall(data)
-    trailer = ""
-    for url in matches:
-            lang = 'LAT'
-            quality = item.quality
-            if "youtube" in url and not trailer:
-                trailer += url
-            elif not '//' in url:#url.startswith('http'):
-                continue
-            title = '[%s] [%s]'
 
-            if url != '' and not "youtube" in url:
-                itemlist.append(item.clone(title=title, url=url, action='play', language=lang))
-    
+    itemlist = []
+
+    data = get_source(item.url)
+    patron = '<li class=elemento> <a href=(.*?) tar'
+    matches = re.compile(patron, re.DOTALL).findall(data)
+
+    for surl in matches:
+
+        new_data = get_source(surl)
+        b_url = scrapertools.find_single_match(new_data, 'var hash=([^;]+)')
+
+        try:
+            url = base64.b64decode(b_url.encode('utf8')).decode('utf8')
+            url = urllib.unquote(url)
+        except:
+            continue
+        lang = 'LAT'
+        quality = item.quality
+        
+        title = '[%s] [%s]'
+
+        if url:
+            itemlist.append(item.clone(title=title, url=url, action='play', language=lang))
+
     itemlist = servertools.get_servers_itemlist(itemlist, lambda i: i.title % (i.server, i.language))
-    if trailer:
-        title = '[COLOR green]Trailer de %s[/COLOR]' % item.contentTitle
-        itemlist.append(item.clone(title=title, url=trailer, action='play', language='LAT', server='youtube'))
 
     if item.infoLabels['mediatype'] == 'movie':
         if config.get_videolibrary_support() and len(itemlist) > 0 and item.extra != 'findvideos':

@@ -3,10 +3,19 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
-import re
 import sys
-import urllib
-import urlparse, base64
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+if PY3:
+    import urllib.parse as urlparse                                             # Es muy lento en PY2.  En PY3 es nativo
+    import urllib.parse as urllib
+else:
+    import urlparse                                                             # Usamos el nativo de PY2 que es más rápido
+    import urllib
+
+import re
+import base64
 
 from core import httptools
 from core import scrapertools
@@ -27,13 +36,13 @@ def mainlist(item):
     itemlist = []
 
     itemlist.append(item.clone(title="Peliculas", action="peliculas", thumbnail=get_thumb('movies', auto=True),
-                               text_blod=True, page=0, url=host + 'peliculas/'))
+                               text_blod=True, page=0, url=host + 'pelicula/'))
 
     itemlist.append(item.clone(title="Géneros", action="generos", thumbnail=get_thumb('genres', auto=True),
-                               text_blod=True, page=0, url=host + 'peliculas/'))
+                               text_blod=True, page=0, url=host + 'pelicula/'))
 
     itemlist.append(item.clone(title="Año de Estreno", action="year_release", thumbnail=get_thumb('year', auto=True),
-                               text_blod=True, page=0,url=host + 'peliculas/'))
+                               text_blod=True, page=0,url=host + 'pelicula/'))
 
     itemlist.append(item.clone(title="Series", action="peliculas", url=host + 'series/',
                                thumbnail=get_thumb('tvshows', auto=True), page=0))
@@ -129,7 +138,7 @@ def newest(categoria):
     item = Item()
     try:
         if categoria == 'peliculas':
-            item.url = host + 'peliculas/'
+            item.url = host + 'pelicula/'
         elif categoria == 'infantiles':
             item.url = host + "genero/animacion/"
         elif categoria == 'terror':
@@ -163,12 +172,12 @@ def peliculas(item):
     except:
         pass
     patron = '<div class="poster">(.*?)<img src="([^"]+)" alt="([^"]+)">.*?'  # langs, img, title.strip() movies
-    patron += '<span class="icon-star2"></span> ([^<]+)</div>.*?' #rating
+    #patron += '<span class="icon-star2"></span> ([^<]+)</div>.*?' #rating
     patron += '</div><a href="([^"]+)">.*?<span>(\d+)</span>.*?'  # url, year
     patron += '<div class="texto">([^<]+)</div>(.*?)</article>'  # plot, info
     matches = scrapertools.find_multiple_matches(data, patron)
 
-    for langs, scrapedthumbnail, scrapedtitle, rating, scrapedurl, year, plot, info in matches:
+    for langs, scrapedthumbnail, scrapedtitle, scrapedurl, year, plot, info in matches:
 
         #para tomar la imagen completa
         scrapedthumbnail = re.sub("(w\d+/)", "original/", scrapedthumbnail)
@@ -178,7 +187,7 @@ def peliculas(item):
         except:
             contentTitle = title
         #rating con color(evaluacion)
-        rcolor = color_rating(rating)
+        #rcolor = color_rating(rating)
         #Calidad
         if '1080p' in info:
             quality = '1080p'
@@ -187,8 +196,8 @@ def peliculas(item):
         else:
             quality = 'SD'
         
-        title += " [COLOR %s](%s)[/COLOR] [COLOR %s](%s)[/COLOR] [COLOR %s][%s][/COLOR]" % (
-            'lightgray', year, rcolor, rating, 'khaki', quality)
+        title += " [COLOR %s](%s)[/COLOR] [COLOR %s][%s][/COLOR]" % (
+            'lightgray', year, 'khaki', quality)
 
         if "/series/" in scrapedurl:
             title = title.replace("[SD]", "(Serie)")
@@ -310,7 +319,7 @@ def temporadas(item):
             if i.infoLabels['title']:
                 # Si la temporada tiene nombre propio añadirselo al titulo del item
                 i.title += " - %s" % (i.infoLabels['title'])
-            if i.infoLabels.has_key('poster_path'):
+            if 'poster_path' in i.infoLabels:
                 # Si la temporada tiene poster propio remplazar al de la serie
                 i.thumbnail = i.infoLabels['poster_path']
 
@@ -351,7 +360,7 @@ def episodios(item):
 
         title = "%sx%s: %s" % (season, episode.zfill(2), scrapertools.unescape(scrapedname))
         new_item = item.clone(title=title, url=scrapedurl, action="findvideos", 
-                              fulltitle=title, contentType="episode")
+                              contentTitle=title, contentType="episode")
         if 'infoLabels' not in new_item:
             new_item.infoLabels = {}
 

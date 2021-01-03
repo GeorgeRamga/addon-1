@@ -3,6 +3,21 @@
 # Scraper tools for reading and processing web elements
 # --------------------------------------------------------------------------------
 
+#from future import standard_library
+#standard_library.install_aliases()
+#from builtins import str
+#from builtins import chr
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+if PY3:
+    import urllib.parse as urlparse                             # Es muy lento en PY2.  En PY3 es nativo
+    import urllib.parse as urllib
+else:
+    import urllib                                               # Usamos el nativo de PY2 que es más rápido
+    import urlparse
+
 import re
 import time
 
@@ -60,9 +75,12 @@ def unescape(text):
             # character reference
             try:
                 if text[:3] == "&#x":
-                    return unichr(int(text[3:-1], 16)).encode("utf-8")
+                    text = unichr(int(text[3:-1], 16)).encode("utf-8")
                 else:
-                    return unichr(int(text[2:-1])).encode("utf-8")
+                    text = unichr(int(text[2:-1])).encode("utf-8")
+                if PY3 and isinstance(text, bytes):
+                    text = text.decode("utf-8")
+                return text
 
             except ValueError:
                 logger.error("error de valor")
@@ -70,8 +88,13 @@ def unescape(text):
         else:
             # named entity
             try:
-                import htmlentitydefs
+                if PY3:
+                    import html.entities as htmlentitydefs
+                else:
+                    import htmlentitydefs
                 text = unichr(htmlentitydefs.name2codepoint[text[1:-1]]).encode("utf-8")
+                if PY3 and isinstance(text, bytes):
+                    text = text.decode("utf-8")
             except KeyError:
                 logger.error("keyerror")
                 pass
@@ -79,7 +102,7 @@ def unescape(text):
                 pass
         return text  # leave as is
 
-    return re.sub("&#?\w+;", fixup, text)
+    return re.sub("&#?\w+;", fixup, str(text))
 
     # Convierte los codigos html "&ntilde;" y lo reemplaza por "ñ" caracter unicode utf-8
 
@@ -89,15 +112,24 @@ def decodeHtmlentities(string):
     entity_re = re.compile("&(#?)(\d{1,5}|\w{1,8});")
 
     def substitute_entity(match):
-        from htmlentitydefs import name2codepoint as n2cp
+        if PY3:
+            from html.entities import name2codepoint as n2cp
+        else:
+            from htmlentitydefs import name2codepoint as n2cp
         ent = match.group(2)
         if match.group(1) == "#":
-            return unichr(int(ent)).encode('utf-8')
+            ent = unichr(int(ent)).encode('utf-8')
+            if PY3 and isinstance(ent, bytes):
+                ent = ent.decode("utf-8")
+            return ent
         else:
             cp = n2cp.get(ent)
 
             if cp:
-                return unichr(cp).encode('utf-8')
+                cp = unichr(cp).encode('utf-8')
+                if PY3 and isinstance(cp, bytes):
+                    cp = cp.decode("utf-8")
+                return cp
             else:
                 return match.group()
 
@@ -297,8 +329,8 @@ def remove_show_from_title(title, show):
     if slugify(title).startswith(slugify(show)):
 
         # Convierte a unicode primero, o el encoding se pierde
-        title = unicode(title, "utf-8", "replace")
-        show = unicode(show, "utf-8", "replace")
+        if not PY3: title = unicode(title, "utf-8", "replace")
+        if not PY3: show = unicode(show, "utf-8", "replace")
         title = title[len(show):].strip()
 
         if title.startswith("-"):
@@ -309,22 +341,22 @@ def remove_show_from_title(title, show):
 
         # Vuelve a utf-8
         title = title.encode("utf-8", "ignore")
+        if PY3 and isinstance(title, bytes):
+            title = title.decode("utf-8")
         show = show.encode("utf-8", "ignore")
+        if PY3 and isinstance(show, bytes):
+            show = show.decode("utf-8")
 
     return title
 
 
 def get_filename_from_url(url):
-    import urlparse
+
     parsed_url = urlparse.urlparse(url)
     try:
-        filename = parsed_url.path
+        filename = parsed_url[2]
     except:
-        # Si falla es porque la implementación de parsed_url no reconoce los atributos como "path"
-        if len(parsed_url) >= 4:
-            filename = parsed_url[2]
-        else:
-            filename = ""
+        filename = ""
 
     if "/" in filename:
         filename = filename.split("/")[-1]
@@ -332,19 +364,77 @@ def get_filename_from_url(url):
     return filename
 
 
-# def get_domain_from_url(url):
-#     import urlparse
-#     parsed_url = urlparse.urlparse(url)
-#     try:
-#         filename = parsed_url.netloc
-#     except:
-#         # Si falla es porque la implementación de parsed_url no reconoce los atributos como "path"
-#         if len(parsed_url) >= 4:
-#             filename = parsed_url[1]
-#         else:
-#             filename = ""
-#
-#     return filename
+def get_domain_from_url(url):
+
+    parsed_url = urlparse.urlparse(url)
+    try:
+        domain = parsed_url[1]
+    except:
+        domain = ""
+
+    return domain
+
+def urlencode(params):
+    encoded_url = ''
+    if isinstance(params, dict):
+        encoded_url = urllib.urlencode(params)
+    return encoded_url
+
+def urldecode(url):
+    params = dict()
+    query_data = urlparse.urlparse(url).query
+    if query_data:
+        params = dict(urlparse.parse_qsl(query_data))
+
+    return params
+
+def unquote(url, plus=False):
+    if plus:
+        url = urllib.unquote_plus(url)
+    else:
+        url = urllib.unquote(url)
+    
+    return url
+
+def quote(url, plus=False):
+    if plus:
+        url = urllib.quote_plus(url)
+    else:
+        url = urllib.quote(url)
+    return url
+
+def remove_format(string):
+    #logger.info()
+    string = string.rstrip()
+    string = re.sub(r'(\[|\[\/)(?:color|COLOR|b|B|i|I).*?\]', '', string)
+    string = re.sub(r'\:|\.|\-|\_|\,|\¿|\?|\¡|\!|\"|\'|\&', ' ', string)
+    string = re.sub(r'\(.*?\).*|\[.*?\].*', ' ', string)
+    string = re.sub(r'\s+', ' ', string).strip()
+    #logger.debug('sale de remove: %s' % string)
+    return string
+
+def normalize(string):
+    import unicodedata
+    if not PY3 and isinstance(string, str):
+        string = string.decode('utf-8')
+    normal = ''.join((c for c in unicodedata.normalize('NFD', unicode(string)) if unicodedata.category(c) != 'Mn'))
+    return normal
+
+def simplify(title, year):
+    
+    if not year or year == '-':
+        year = find_single_match(title, r"^.+?\s*(?:(\(\d{4}\)$|\[\d{4}\]))")
+        if year:
+            title = title.replace(year, "").strip()
+            year = year[1:-1]
+        else:
+            year = '-'
+    
+    title = remove_format(title)
+    #title = normalize(title)
+
+    #logger.error(title.lower())
+    return title.lower(), year
 
 
 def get_season_and_episode(title):
@@ -366,7 +456,7 @@ def get_season_and_episode(title):
     """
     filename = ""
 
-    patrons = ["(\d+)\s*[x-]\s*(\d+)", "(\d+)\s*×\s*(\d+)", "(?:s|t)(\d+)e(\d+)",
+    patrons = ["(\d+)\s*[x-]\s*(\d+)", "(\d+)\s*×\s*(\d+)", "(?:s|t)(\d+) ?e(\d+)",
                "(?:season|temp\w*)\s*(\d+)\s*(?:capitulo|epi|episode\w*)\s*(\d+)"]
 
     for patron in patrons:

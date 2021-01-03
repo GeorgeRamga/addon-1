@@ -5,11 +5,11 @@
     "patterns": [
       {
         "pattern": "clipwatching.com/(e.*?.html)",
-        "url": "http://clipwatching.com/\\1"
+        "url": "https://clipwatching.com/\\1"
       },
       {
         "pattern": "clipwatching.com/(\\w+)",
-        "url": "http://clipwatching.com/embed-\\1.html"
+        "url": "https://clipwatching.com/embed-\\1.html"
       }
     ]
   },
@@ -42,5 +42,5 @@
       "visible": false
     }
   ],
-  "thumbnail": "https://s17.postimg.cc/e6kcan0vj/clipwatching1.png"
+  "thumbnail": "https://i.postimg.cc/L6t6gMWr/clipwatching.png"
 }

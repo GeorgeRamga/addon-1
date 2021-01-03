@@ -3,8 +3,8 @@
     "name": "Cuevana2",
     "active": true,
     "adult": false,
-    "language": ["en"],
-    "thumbnail": "cuevana2.png",
+    "language": [],
+    "thumbnail": "https://i.postimg.cc/GHK7MV0P/cuevana2.png",
     "categories": [
         "movie",
         "tvshow",
@@ -23,7 +23,7 @@
         "id": "include_in_global_search",
         "type": "bool",
         "label": "Incluir en busqueda global",
-        "default": true,
+        "default": false,
         "enabled": true,
         "visible": true
         }

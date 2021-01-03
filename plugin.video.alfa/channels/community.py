@@ -3,14 +3,17 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
 import re
-import urllib
-import os
 
 from core import httptools
 from core import scrapertools
 from core import servertools
 from core import jsontools
+from core import filetools
 from channelselector import get_thumb
 from core import tmdb
 from core.item import Item
@@ -24,14 +27,13 @@ list_language = ['LAT', 'CAST', 'VO', 'VOSE']
 list_servers = ['directo']
 list_quality = ['SD', '720', '1080', '4k']
 
+
 def mainlist(item):
     logger.info()
 
-    path = os.path.join(config.get_data_path(), 'community_channels.json')
-    if not os.path.exists(path):
-        with open(path, "w") as file:
-            file.write('{"channels":{}}')
-            file.close()
+    path = filetools.join(config.get_data_path(), 'community_channels.json')
+    if not filetools.exists(path):
+        res = filetools.write(path, '{"channels":{}}', silent=True)
     autoplay.init(item.channel, list_servers, list_quality)
 
     return show_channels(item)
@@ -45,14 +47,12 @@ def show_channels(item):
                  "action": "remove_channel",
                  "channel": "community"}]
 
-
-    path = os.path.join(config.get_data_path(), 'community_channels.json')
-    file = open(path, "r")
-    json = jsontools.load(file.read())
+    path = filetools.join(config.get_data_path(), 'community_channels.json')
+    json = jsontools.load(filetools.read(path))
 
     itemlist.append(Item(channel=item.channel, title='Agregar un canal', action='add_channel', thumbnail=get_thumb('add.png')))
 
-    for key, channel in json['channels'].items():
+    for key, channel in list(json['channels'].items()):
 
         if 'poster' in channel:
             poster = channel['poster']
@@ -63,37 +63,47 @@ def show_channels(item):
                              thumbnail=poster, action='show_menu', channel_id = key, context=context))
     return itemlist
 
+
 def load_json(item):
     logger.info()
 
     if item.url.startswith('http'):
         json_file = httptools.downloadpage(item.url).data
     else:
-        json_file = open(item.url, "r").read()
+        json_file = filetools.read(item.url)
 
     json_data = jsontools.load(json_file)
 
     return json_data
+
 
 def show_menu(item):
     global list_data
     logger.info()
     itemlist = []
 
-    json_data = load_json(item)
+    if not item.results:
+        json_data = load_json(item)
+    else:
+        json_data = item.results
 
     if "menu" in json_data:
         for option in json_data['menu']:
-            itemlist.append(Item(channel=item.channel, title=option['title'], action='show_menu', url=option['link']))
+            if 'buscar' in option['title'].lower():
+                action = 'finder'
+            else:
+                action = 'show_menu'
+            itemlist.append(Item(channel=item.channel, title=option['title'], action=action, url=option['link']))
         autoplay.show_option(item.channel, itemlist)
         return itemlist
 
     if "movies_list" in json_data:
         item.media_type='movies_list'
+        item.first = 0
 
     elif "tvshows_list" in json_data:
         item.media_type = 'tvshows_list'
-
+        item.first = 0
     elif "episodes_list" in json_data:
         item.media_type = 'episodes_list'
 
@@ -102,13 +112,27 @@ def show_menu(item):
 
     return itemlist
 
+
 def list_all(item):
     logger.info()
 
     itemlist = []
+    next = False
     media_type = item.media_type
-    json_data = load_json(item)
-    for media in json_data[media_type]:
+
+    if not item.results:
+        json_data = load_json(item)
+    else:
+        json_data = item.results
+
+    first = item.first
+    last = first + 19
+    if last > len(json_data[media_type]):
+        last = len(json_data[media_type])
+    else:
+        next = True
+
+    for media in json_data[media_type][first:last]:
 
         quality, language, plot, poster = set_extra_values(media)
 
@@ -133,7 +157,16 @@ def list_all(item):
         itemlist.append(new_item)
 
     tmdb.set_infoLabels(itemlist, seekTmdb=True)
+
+    # Pagination
+
+    if next:
+        first = last
+        itemlist.append(Item(channel=item.channel, title="Siguiente >>", url=item.url, action='list_all',
+                         media_type=item.media_type, results=item.results, first=first))
+
     return itemlist
+
 
 def seasons(item):
     logger.info()
@@ -197,6 +230,7 @@ def findvideos(item):
 
     return itemlist
 
+
 def add_channel(item):
     logger.info()
     import xbmc
@@ -210,7 +244,7 @@ def add_channel(item):
         file_path = xbmcgui.Dialog().browseSingle(1, 'Alfa - (Comunidad)', 'files')
         try:
             channel_to_add['path'] = file_path
-            json_file = jsontools.load(open(file_path, "r").read())
+            json_file = jsontools.load(filetools.read(file_path))
             channel_to_add['channel_name'] = json_file['channel_name']
             if "poster" in json_file:
                 channel_to_add['poster'] = json_file['poster']
@@ -231,25 +265,24 @@ def add_channel(item):
         platformtools.dialog_ok('Alfa', 'No es posible agregar este tipo de canal')
         return
     channel_to_add['channel_name'] = json_file['channel_name']
-    path = os.path.join(config.get_data_path(), 'community_channels.json')
+    path = filetools.join(config.get_data_path(), 'community_channels.json')
 
-    community_json = open(path, "r")
-    community_json = jsontools.load(community_json.read())
+    community_json = jsontools.load(filetools.read(path))
     id = len(community_json['channels']) + 1
     community_json['channels'][id]=(channel_to_add)
 
-    with open(path, "w") as file:
-         file.write(jsontools.dump(community_json))
-    file.close()
+    res = filetools.write(path, jsontools.dump(community_json), silent=True)
 
     platformtools.dialog_notification('Alfa', '%s se ha agregado' % json_file['channel_name'])
+    platformtools.itemlist_refresh()
     return
+
 
 def remove_channel(item):
     logger.info()
     import xbmc
     import xbmcgui
-    path = os.path.join(config.get_data_path(), 'community_channels.json')
+    path = filetools.join(config.get_data_path(), 'community_channels.json')
 
     community_json = open(path, "r")
     community_json = jsontools.load(community_json.read())
@@ -257,9 +290,7 @@ def remove_channel(item):
     id = item.channel_id
     to_delete = community_json['channels'][id]['channel_name']
     del community_json['channels'][id]
-    with open(path, "w") as file:
-         file.write(jsontools.dump(community_json))
-    file.close()
+    res = filetools.write(path, jsontools.dump(community_json), silent=True)
 
     platformtools.dialog_notification('Alfa', '%s ha sido eliminado' % to_delete)
     platformtools.itemlist_refresh()
@@ -284,6 +315,7 @@ def set_extra_values(dict):
 
     return quality, language, plot, poster
 
+
 def set_title(title, language, quality):
     logger.info()
 
@@ -299,3 +331,30 @@ def set_title(title, language, quality):
                     title += '[%s]' % lang.upper()
 
     return title.capitalize()
+
+
+def finder(item):
+    logger.info()
+
+    keywords = platformtools.dialog_input()
+    results = dict()
+    json_data = load_json(item)
+
+    if 'movies_list' in json_data:
+        json_data = json_data['movies_list']
+        item.media_type = 'movies_list'
+    elif 'tvshows_list' in json_data:
+        json_data = json_data['tvshows_list']
+        item.media_type = 'tvshows_list'
+    else:
+        return
+    
+    string_list = list()
+
+    for s in keywords.split(' '):
+        if len(s) > 3:
+            string_list.append(s)
+
+    results[item.media_type] = [c for s in string_list for c in json_data if s.lower() in c['title'].lower()]
+    item.results = results
+    return show_menu(item)

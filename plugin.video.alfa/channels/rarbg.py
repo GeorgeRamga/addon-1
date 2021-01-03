@@ -1,9 +1,17 @@
 # -*- coding: utf-8 -*-
 
-import re
 import sys
-import urllib
-import urlparse
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+if PY3:
+    #from future import standard_library
+    #standard_library.install_aliases()
+    import urllib.parse as urlparse                               # Es muy lento en PY2.  En PY3 es nativo
+else:
+    import urlparse                                               # Usamos el nativo de PY2 que es más rápido
+
+import re
 import time
 
 from channelselector import get_thumb
@@ -20,11 +28,12 @@ from channels import autoplay
 
 #IDIOMAS = {'CAST': 'Castellano', 'LAT': 'Latino', 'VO': 'Version Original'}
 IDIOMAS = {'Castellano': 'CAST', 'Latino': 'LAT', 'Version Original': 'VO'}
-list_language = IDIOMAS.values()
+list_language = list(IDIOMAS.values())
 list_quality = []
 list_servers = ['torrent']
 
-host = 'https://rarbgmirror.org/'
+#host = 'https://rarbgmirror.org/'
+host = 'https://proxyrarbg.org/'
 channel = 'rarbg'
 categoria = channel.capitalize()
 __modo_grafico__ = config.get_setting('modo_grafico', channel)
@@ -87,7 +96,8 @@ def calidades(item):
     data = ''
     try:
         data = re.sub(r"\n|\r|\t|\s{2}|(<!--.*?-->)", "", httptools.downloadpage(item.url, timeout=timeout).data)
-        data = unicode(data, "utf-8", errors="replace").encode("utf-8")
+        if not PY3:
+            data = unicode(data, "utf-8", errors="replace").encode("utf-8")
     except:
         pass
         
@@ -183,7 +193,8 @@ def listado(item):
         data = ''
         try:
             data = re.sub(r"\n|\r|\t|\s{2}|(<!--.*?-->)|&nbsp;", "", httptools.downloadpage(next_page_url, timeout=timeout_search).data)
-            data = unicode(data, "utf-8", errors="replace").encode("utf-8")
+            if not PY3:
+                data = unicode(data, "utf-8", errors="replace").encode("utf-8")
         except:
             pass
         
@@ -239,7 +250,8 @@ def listado(item):
             try:
                 data_last = ''
                 data_last = re.sub(r"\n|\r|\t|\s{2}|(<!--.*?-->)|&nbsp;", "", httptools.downloadpage(item.url + '&page=%s' % last_page, timeout=timeout_search).data)
-                data_last = unicode(data_last, "utf-8", errors="replace").encode("utf-8")
+                if not PY3:
+                    data_last = unicode(data_last, "utf-8", errors="replace").encode("utf-8")
                 last_page = int(scrapertools.find_single_match(data_last, patron_last)) #lo cargamos como entero
             except:                                                                     #Si no lo encuentra, lo ponemos a 1
                 #logger.error('ERROR 03: LISTADO: Al obtener la paginación: ' + patron_next + ' / ' + patron_last + ' / ' + scrapertools.find_single_match(data, "<ul class=\"pagination\">.*?<\/span><\/a><\/li><\/ul><\/nav><\/div><\/div><\/div>"))
@@ -255,7 +267,10 @@ def listado(item):
             else:
                 url = scrapedurl
             size = scrapedsize
-            title = title.replace("á", "a").replace("é", "e").replace("í", "i").replace("ó", "o").replace("ú", "u").replace("ü", "u").replace("ï¿½", "ñ").replace("Ã±", "ñ").replace("&atilde;", "a").replace("&etilde;", "e").replace("&itilde;", "i").replace("&otilde;", "o").replace("&utilde;", "u").replace("&ntilde;", "ñ").replace("&#8217;", "'")
+            title = title.replace("á", "a").replace("é", "e").replace("í", "i")\
+                    .replace("ó", "o").replace("ú", "u").replace("ü", "u")\
+                    .replace("ï¿½", "ñ").replace("Ã±", "ñ").replace("&#8217;", "'")\
+                    .replace("&amp;", "&")
 
             if scrapedurl in title_lista:                                   #Si ya hemos procesado el título, lo ignoramos
                 continue
@@ -416,7 +431,8 @@ def findvideos(item):
         
     try:
         data = re.sub(r"\n|\r|\t|\s{2}|(<!--.*?-->)", "", httptools.downloadpage(item.url, timeout=timeout).data)
-        data = unicode(data, "utf-8", errors="replace").encode("utf-8")
+        if not PY3:
+            data = unicode(data, "utf-8", errors="replace").encode("utf-8")
     except:
         pass
         
@@ -534,15 +550,16 @@ def play(item):                                 #Permite preparar la descarga de
     logger.info()
     itemlist = []
     headers = []
-    import os
     from core import downloadtools
     from core import ziptools
+    from core import filetools
     
     #buscamos la url del .torrent
     patron = '<tr><td align="(?:[^"]+)?"\s*class="(?:[^"]+)?"\s*width="(?:[^"]+)?">\s*Torrent:<\/td><td class="(?:[^"]+)?">\s*<img src="(?:[^"]+)?"\s*alt="(?:[^"]+)?"\s*border="(?:[^"]+)?"\s*\/>\s*<a onmouseover="(?:[^"]+)?"\s*onmouseout="(?:[^"]+)?" href="([^"]+)".*?<\/a>'
     try:
         data = re.sub(r"\n|\r|\t|\s{2}|(<!--.*?-->)", "", httptools.downloadpage(item.url, timeout=timeout).data)
-        data = unicode(data, "utf-8", errors="replace").encode("utf-8")
+        if not PY3:
+            data = unicode(data, "utf-8", errors="replace").encode("utf-8")
     except:
         pass
     status, itemlist = check_blocked_IP(data, itemlist)                 #Comprobamos si la IP ha sido bloqueada
@@ -570,19 +587,18 @@ def play(item):                                 #Permite preparar la descarga de
         videolibrary_path = config.get_videolibrary_path()              #Calculamos el path absoluto a partir de la Videoteca
         if videolibrary_path.lower().startswith("smb://"):              #Si es una conexión SMB, usamos userdata local
             videolibrary_path = config.get_data_path()                  #Calculamos el path absoluto a partir de Userdata
-        videolibrary_path = os.path.join(videolibrary_path, "subtitles")
+        videolibrary_path = filetools.join(videolibrary_path, "subtitles")
         #Primero se borra la carpeta de subtitulos para limpiar y luego se crea
-        if os.path.exists(videolibrary_path):   
-            import shutil
-            shutil.rmtree(videolibrary_path, ignore_errors=True)
+        if filetools.exists(videolibrary_path):   
+            filetools.rmtree(videolibrary_path)
             time.sleep(1)
-        if not os.path.exists(videolibrary_path):   
-            os.mkdir(videolibrary_path)
+        if not filetools.exists(videolibrary_path):   
+            filetools.mkdir(videolibrary_path)
         subtitle_name = 'Rarbg-ES_SUBT.zip'                                     #Nombre del archivo de sub-títulos
-        subtitle_folder_path = os.path.join(videolibrary_path, subtitle_name)   #Path de descarga
+        subtitle_folder_path = filetools.join(videolibrary_path, subtitle_name)   #Path de descarga
         ret = downloadtools.downloadfile(item.subtitle, subtitle_folder_path, headers=headers, continuar=True, silent=True)
 
-        if os.path.exists(subtitle_folder_path):
+        if filetools.exists(subtitle_folder_path):
             # Descomprimir zip dentro del addon
             # ---------------------------------
             try:
@@ -590,15 +606,15 @@ def play(item):                                 #Permite preparar la descarga de
                 unzipper.extract(subtitle_folder_path, videolibrary_path)
             except:
                 import xbmc
-                xbmc.executebuiltin('XBMC.Extract("%s", "%s")' % (subtitle_folder_path, videolibrary_path))
+                xbmc.executebuiltin('Extract("%s", "%s")' % (subtitle_folder_path, videolibrary_path))
                 time.sleep(1)
             
             # Borrar el zip descargado
             # ------------------------
-            os.remove(subtitle_folder_path)
+            filetools.remove(subtitle_folder_path)
             
             #Tomo el primer archivo de subtítulos como valor por defecto
-            for raiz, subcarpetas, ficheros in os.walk(videolibrary_path):
+            for raiz, subcarpetas, ficheros in filetools.walk(videolibrary_path):
                 for f in ficheros:
                     if f.endswith(".srt"):
                         #f_es = 'rarbg_subtitle.spa.srt'
@@ -606,8 +622,8 @@ def play(item):                                 #Permite preparar la descarga de
                         if not f_es:
                             f_es = item.infoLabels['originaltitle'] + '.spa.srt'
                             f_es = f_es.replace(':', '').lower()
-                        os.rename(os.path.join(videolibrary_path, f), os.path.join(videolibrary_path, f_es))
-                        item.subtitle = os.path.join(videolibrary_path, f_es)   #Archivo de subtitulos
+                        filetools.rename(filetools.join(videolibrary_path, f), filetools.join(videolibrary_path, f_es))
+                        item.subtitle = filetools.join(videolibrary_path, f_es)   #Archivo de subtitulos
                         break
                 break
         
@@ -670,7 +686,8 @@ def episodios(item):
     data = ''                                                                   #Inserto en num de página en la url
     try:
         data = re.sub(r"\n|\r|\t|\s{2}|(<!--.*?-->)|&nbsp;", "", httptools.downloadpage(item.url, timeout=timeout).data)
-        data = unicode(data, "utf-8", errors="replace").encode("utf-8")
+        if not PY3:
+            data = unicode(data, "utf-8", errors="replace").encode("utf-8")
     except:                                                                     #Algún error de proceso, salimos
         pass
         

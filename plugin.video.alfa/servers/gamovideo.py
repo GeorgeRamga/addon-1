@@ -1,12 +1,17 @@
 # -*- coding: utf-8 -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
 import re
 import random
 from core import httptools
 from core import scrapertools
 from lib import jsunpack
 from platformcode import logger
-from lib import alfaresolver
+if not PY3: from lib import alfaresolver
+else: from lib import alfaresolver_py3 as alfaresolver
 
 
 ver = random.randint(66, 67)
@@ -19,9 +24,15 @@ def test_video_exists(page_url):
     
 
     data = alfaresolver.get_data(page_url, False)
+    if not "|mp4|" in data:
+        dict_cookie = {'domain': '.gamovideo.com', 'expires': 0}
+        httptools.set_cookies(dict_cookie)
+        data = alfaresolver.get_data(page_url, False)
+    
     global DATA
     DATA = data
-
+    if "images/proced.png" in data:
+        return False, "[Gamovideo] El archivo no existe o ha sido borrado"
     if "File was deleted" in data or ("Not Found"  in data and not "|mp4|" in data) or "File was locked by administrator" in data:
         return False, "[Gamovideo] El archivo no existe o ha sido borrado"
     if "Video is processing now" in data:
@@ -39,6 +50,7 @@ def get_video_url(page_url, premium=False, user="", password="", video_password=
 
     packer = scrapertools.find_single_match(data,
                                             "<script type='text/javascript'>(eval.function.p,a,c,k,e,d..*?)</script>")
+
     if packer != "":
         try:
             data = jsunpack.unpack(packer)
@@ -57,6 +69,7 @@ def get_video_url(page_url, premium=False, user="", password="", video_password=
                 logger.error("Error get gcookie")
             n += 1
     data = re.sub(r'\n|\t|\s+', '', data)
+
     host = scrapertools.find_single_match(data, r'\[\{image:"(http://[^/]+/)')
     mediaurl = scrapertools.find_single_match(data, r',\{file:"([^"]+)"')
     if not mediaurl.startswith(host):

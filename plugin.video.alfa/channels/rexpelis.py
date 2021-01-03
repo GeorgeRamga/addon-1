@@ -3,6 +3,12 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+import re
+
 from channelselector import get_thumb
 from channels import autoplay
 from channels import filtertools
@@ -14,18 +20,14 @@ from core.item import Item
 from platformcode import config, logger, platformtools
 
 
-idio = {'es-mx': 'LAT','es-es': 'ESP','en': 'VO'}
-cali = {'poor': 'SD','low': 'SD','medium': 'HD','high': 'HD'}
-
-list_language = idio.values()
-list_quality = ["SD","HD"]
-list_servers = ['rapidvideo', 'streamango', 'fastplay', 'openload', 'netu', 'vidoza', 'uptobox']
+list_language = ['LAT']
+list_quality = []
+list_servers = ['fembed', 'verystream','directo', 'fastplay', 'digiloaded']
 
 
 __channel__='rexpelis'
 
-host = "https://www.rexpelis.com"
-
+host = "https://www.rexpelis.biz"
 try:
     __modo_grafico__ = config.get_setting('modo_grafico', __channel__)
 except:
@@ -34,20 +36,26 @@ except:
 
 def mainlist(item):
     logger.info()
-    autoplay.init(item.channel, list_servers, list_quality)
     itemlist = []
+    autoplay.init(item.channel, list_servers, list_quality)
     data = httptools.downloadpage(host).data
-    matches = scrapertools.find_multiple_matches(data, 'cant-genre">([^<]+)')
+    matches = scrapertools.find_multiple_matches(data, 'cant-genre">(\d+)')
     cantidad = 0
     for cantidad1 in matches:
         cantidad += int(cantidad1)
-    itemlist.append(Item(channel = item.channel, title = "Actualizadas", action = "peliculas", url = host, page=1, type ="movie", thumbnail = get_thumb("updated", auto = True)))
-    itemlist.append(Item(channel = item.channel, title = "Estrenos", action = "estrenos", url = host + "/estrenos", page=1, thumbnail = get_thumb("premieres", auto = True)))
-    itemlist.append(Item(channel = item.channel, title = "Por género (Total películas: %s)" %cantidad, action = "generos", url = host, extra = "Genero", thumbnail = get_thumb("genres", auto = True) ))
-    itemlist.append(Item(channel = item.channel, title = "Por año", action = "annos", url = host, extra = "Genero", thumbnail = get_thumb("year", auto = True) ))
-    itemlist.append(Item(channel = item.channel, title = "", folder=False))
-    itemlist.append(Item(channel = item.channel, title = "Buscar", action = "search", url = host + "/search?term=", thumbnail = get_thumb("search", auto = True)))
-    itemlist.append(item.clone(title="Configurar canal...", text_color="gold", action="configuracion", folder=False))
+    itemlist.append(Item(channel=item.channel, title="Actualizadas", action="peliculas",
+                         url=host, page=1, type ="movie", thumbnail=get_thumb("updated", auto = True)))
+    itemlist.append(Item(channel=item.channel, title="Estrenos", action="estrenos",
+                         url=host + "/estrenos",
+                         page=1, thumbnail=get_thumb("premieres", auto = True)))
+    itemlist.append(Item(channel=item.channel, title="Por género (Total películas: %s)" %cantidad,
+                         action="generos", url=host, extra="Genero", thumbnail=get_thumb("genres", auto = True)))
+    itemlist.append(Item(channel=item.channel, title="Por año", action="annos",
+                         url=host, extra="Genero", thumbnail=get_thumb("year", auto = True)))
+    itemlist.append(Item(channel=item.channel, title="Buscar...", action="search",
+                         url=host + "/search?term=", thumbnail=get_thumb("search", auto = True)))
+    itemlist.append(item.clone(title="Configurar canal...", text_color="gold",
+                               action="configuracion", folder=False))
     autoplay.show_option(item.channel, itemlist)
     return itemlist
 
@@ -74,12 +82,9 @@ def sub_search(item):
     logger.info()
     itemlist = []
     url = item.url
-    headers = [
-    ['X-Requested-With', 'XMLHttpRequest']
-    ]
     data = httptools.downloadpage(item.url).data
     token = scrapertools.find_single_match(data, 'csrf-token" content="([^"]+)')
-    data_js = httptools.downloadpage(item.url + "&_token=" + token, headers=headers).json
+    data_js = httptools.downloadpage(item.url + "&_token=" + token, headers={'X-Requested-With': 'XMLHttpRequest'}).json
     for js in data_js["data"]["m"]:
         js["title"] = quitano(js["title"])
         itemlist.append(Item(channel = item.channel,
@@ -112,7 +117,8 @@ def estrenos(item):
                              infoLabels = {'year':scrapedyear},
                              thumbnail = scrapedthumbnail,
                              title = scrapedtitle + " (%s)" %scrapedyear,
-                             url = scrapedurl
+                             url = scrapedurl,
+                             language = 'LAT'
                              ))
     tmdb.set_infoLabels(itemlist)
     return itemlist
@@ -128,10 +134,11 @@ def generos(item):
     patron += 'cant-genre">([^<]+)'
     matches = scrapertools.find_multiple_matches(bloque, patron)
     for url, titulo, cantidad in matches:
+        slug = scrapertools.find_single_match(url, "/genero/(.*)")
         itemlist.append(Item(channel = item.channel,
                              action = "peliculas",
                              page = 1,
-                             slug = titulo,
+                             slug = slug,
                              title = titulo + "(%s)" %cantidad,
                              type = "genre",
                              url = url
@@ -142,15 +149,12 @@ def generos(item):
 def peliculas(item):
     logger.info()
     itemlist = []
-    headers = [
-    ['X-Requested-With', 'XMLHttpRequest']
-    ]
     data = httptools.downloadpage(item.url).data
     token = scrapertools.find_single_match(data, 'csrf-token" content="([^"]+)')
-    post = "page=%s&type=%s&_token=%s&slug=%s" %(item.page, item.type, token, item.slug)
+    post = "page=%s&type=%s&_token=%s" %(item.page, item.type, token)
     if item.slug:
         post += "&slug=%s" %item.slug
-    data = httptools.downloadpage(host + "/pagination", post=post, headers=headers).data
+    data = httptools.downloadpage(host + "/pagination", post=post, headers={'X-Requested-With': 'XMLHttpRequest'}).data
     patron  = '(?s)href="([^"]+)".*?'
     patron += 'src="([^"]+)".*?'
     patron += 'text-center">([^<]+).*?'
@@ -164,7 +168,8 @@ def peliculas(item):
                              infoLabels = {'year':scrapedyear},
                              thumbnail = scrapedthumbnail,
                              title = scrapedtitle + " (%s)" %scrapedyear,
-                             url = scrapedurl
+                             url = scrapedurl,
+                             language= 'LAT'
                              ))
     tmdb.set_infoLabels(itemlist)
     #pagination
@@ -231,13 +236,14 @@ def findvideos(item):
     logger.info()
     itemlist = []
     data = httptools.downloadpage(item.url).data
-    patron  = "video\[(\d)+\] = '([^']+)"
+    patron  = 'data-player-id="([^"]+)".*?<a href.*?>([^<]+)'
     matches = scrapertools.find_multiple_matches(data, patron)
-    for scrapedoption, scrapedurl in matches:
-        tit = scrapertools.find_single_match(data, 'option%s">([^<]+)' %scrapedoption)
-        scrapedurl = scrapertools.find_single_match(scrapedurl, 'src="([^"]+)"')
-        if "VIP" in tit: tit = "fembed"
-        titulo = "Ver en %s" %tit.capitalize()
+    for scrapedid, title in matches:
+        player = '%s/player/embed/movie/%s' % (host, scrapedid)
+        new_data = httptools.downloadpage(player).data
+        scrapedurl = scrapertools.find_single_match(new_data, 'src="([^"]+)"')
+        if "VIP" in title: title = "fembed"
+        titulo = "Ver en %s" %title.capitalize()
         itemlist.append(
                  item.clone(action = "play",
                  title = titulo,
@@ -246,18 +252,11 @@ def findvideos(item):
     tmdb.set_infoLabels(itemlist, __modo_grafico__)
     # Requerido para FilterTools
     itemlist = filtertools.get_links(itemlist, item, list_language)
-
     # Requerido para AutoPlay
-
     autoplay.start(itemlist, item)
-
     if itemlist and item.contentChannel != "videolibrary":
-        itemlist.append(Item(channel = item.channel))
-        itemlist.append(item.clone(channel="trailertools", title="Buscar Tráiler", action="buscartrailer", context="",
-                                   text_color="magenta"))
-        # Opción "Añadir esta película a la videoteca de KODI"
         if config.get_videolibrary_support():
-            itemlist.append(Item(channel=item.channel, title="Añadir a la videoteca", text_color="green",
+            itemlist.append(Item(channel=item.channel, title="Añadir a la videoteca", text_color="gold",
                                  action="add_pelicula_to_library", url=item.url, thumbnail = item.thumbnail,
                                  contentTitle = item.contentTitle
                                 ))
@@ -267,7 +266,9 @@ def findvideos(item):
 def play(item):
     logger.info()
     itemlist = []
-    if "rexpelis.com" in item.url:
+    if "digiloaded" in item.url:
+        item.server = "oprem"
+    if "rexpelis.biz" in item.url:
         data = httptools.downloadpage(item.url).data
         url = scrapertools.find_single_match(data, '<iframe src="([^"]+)')
         headers = {"Referer":item.url}
@@ -283,5 +284,8 @@ def play(item):
 
 def quitano(title):
     # Quita el año que muestran en el título en la página, para que funcione bien tmdb
-    t = title.replace(scrapertools.find_single_match(title, '\(\s*\d{4}\)'),"")
+    t = re.sub('\(\s*\d{4}\s*\)',"", title)
+    if ' / ' in title:
+        t = t.split(' / ')[0]
+    t = re.sub('\d{4}$',"", t)
     return t.strip()

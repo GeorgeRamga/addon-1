@@ -4,21 +4,13 @@
   "active": true,
   "adult": false,
   "language": ["cast", "lat"],
-  "thumbnail": "https://animeboom.net/images/logo.png",
+  "thumbnail": "https://animebum.net/images/logo.png",
   "banner": "",
   "categories": [
     "anime",
     "vos"
   ],
   "settings": [
-    {
-      "id": "include_in_global_search",
-      "type": "bool",
-      "label": "Incluir en busqueda global",
-      "default": false,
-      "enabled": false,
-      "visible": false
-    },
     {
       "id": "filter_languages",
       "type": "list",

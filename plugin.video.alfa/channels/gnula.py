@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
 from core import httptools
 from core import scrapertools
 from core import servertools
@@ -8,7 +12,7 @@ from core.item import Item
 from platformcode import config, logger
 from channelselector import get_thumb
 
-host = "http://gnula.nu/"
+host = "https://gnula.nu/"
 host_search = "https://cse.google.com/cse/element/v1?rsz=filtered_cse&num=20&hl=es&source=gcsc&gss=.es&sig=c891f6315aacc94dc79953d1f142739e&cx=014793692610101313036:vwtjajbclpq&q=%s&safe=off&cse_tok=%s&googlehost=www.google.com&callback=google.search.Search.csqr6098&nocache=1540313852177&start=0"
 item_per_page = 20
 
@@ -186,7 +190,7 @@ def findvideos(item):
                 itemlist.append(Item(channel = item.channel, action = ""))
                 itemlist.append(Item(channel=item.channel, title="Añadir a la videoteca", text_color="green",
                                      action="add_pelicula_to_library", url=item.url, thumbnail = item.thumbnail,
-                                     fulltitle = item.contentTitle
+                                     contentTitle = item.contentTitle
                                      ))
     return itemlist
 

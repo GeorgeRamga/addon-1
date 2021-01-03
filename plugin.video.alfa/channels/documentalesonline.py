@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
 import re
 
 from core import httptools
@@ -83,7 +87,7 @@ def seccion(item):
             action = "findvideos"
         else:
             action = aux_action
-        itemlist.append(item.clone(title=title, url=url, action=action, fulltitle=title))
+        itemlist.append(item.clone(title=title, url=url, action=action, contentTitle=title))
     return itemlist
 
 
@@ -100,7 +104,7 @@ def videos(item):
     data = scrapertools.find_single_match(data, patron)
     matches = re.compile('<a href="([^"]+)">(.*?)</a>.*?<img.*?src="([^"]+)"', re.DOTALL).findall(data)
     for url, title, thumb in matches:
-        itemlist.append(item.clone(title=title, url=url, action="findvideos", fulltitle=title, thumbnail=thumb))
+        itemlist.append(item.clone(title=title, url=url, action="findvideos", contentTitle=title, thumbnail=thumb))
     if pagination:
         itemlist.append(item.clone(title=">> Página siguiente", url=pagination))
     return itemlist
@@ -114,7 +118,7 @@ def categorias(item):
     data = scrapertools.find_single_match(data, 'a href="#">Categorías</a><ul class="sub-menu">(.*?)</ul>')
     matches = scrapertools.find_multiple_matches(data, '<a href="([^"]+)">(.*?)</a>')
     for url, title in matches:
-        itemlist.append(item.clone(title=title, url=url, action="videos", fulltitle=title))
+        itemlist.append(item.clone(title=title, url=url, action="videos", contentTitle=title))
     return itemlist
 
 
@@ -148,7 +152,7 @@ def findvideos(item):
         data = scrapertools.find_multiple_matches(data, '<iframe.+?src="([^"]+)"')
         itemlist.extend(servertools.find_video_items(data=",".join(data)))
         for videoitem in itemlist:
-            videoitem.fulltitle = item.fulltitle
+            videoitem.contentTitle = item.contentTitle
             videoitem.channel = item.channel
     itemlist = servertools.get_servers_itemlist(itemlist)
     return itemlist

@@ -1,7 +1,14 @@
 # -*- coding: utf-8 -*-
+# -*- Channel Cliver -*-
+# -*- Created for Alfa-addon -*-
+# -*- By the Alfa Develop Group -*-
+
+from builtins import range
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
 
 import re, time
-import urllib
 
 from channels import autoplay
 from channels import filtertools
@@ -14,9 +21,9 @@ from core.item import Item
 from platformcode import config, logger, platformtools
 from channelselector import get_thumb
 
-direct_play = True
+direct_play = config.get_setting('direct_play', channel='cliver')
 IDIOMAS = {'es': 'CAST', 'lat': 'LAT', 'es_la': 'LAT', 'vose': 'VOSE', 'ingles': 'VOS'}
-list_language = IDIOMAS.values()
+list_language = list(IDIOMAS.values())
 list_quality = []
 list_servers = ['openload', 'rapidvideo', 'directo']
 
@@ -29,7 +36,9 @@ xhr_srv = 'https://directvideo.stream/getFile.php'
 def mainlist(item):
     logger.info()
     itemlist = []
-    type_content = config.get_setting('default_content', channel='cliver')
+    #No series
+    #type_content = config.get_setting('default_content', channel='cliver')
+    type_content = 0
     if type_content > 0:
         mod = 'series'
         thumbm = 'tvshows'
@@ -42,80 +51,81 @@ def mainlist(item):
     #if item.tcont:
         #type_content = item.tcont
     par_type = {"mas-vistas": "mas-vistas-series", "genero": "generosSeries", "anio": "anioSeries", "buscador": "buscadorSeries"}
-    listpar = par_type.items()
+    listpar = list(par_type.items())
 
     autoplay.init(item.channel, list_servers, list_quality)
 
     #Titulo principal series/peliculas
-    itemlist.append(item.clone(channel=item.channel,title="[COLOR springgreen][B]%s[/B][/COLOR]" % mod.upper(),
-                    action="",
-                    url='', folder=False,
-                    thumbnail=get_thumb(thumbm, auto=True)
-                    ))
+    # itemlist.append(Item(channel=item.channel,title="[COLOR springgreen][B]%s[/B][/COLOR]" % mod.upper(),
+    #                 action="", plot=item.plot,
+    #                 url='', folder=False,
+    #                 thumbnail=get_thumb(thumbm, auto=True)
+    #                 ))
 
     if type_content == 0:
-        itemlist.append(item.clone(channel=item.channel, title="Estrenos",
+        itemlist.append(Item(channel=item.channel, title="Estrenos",
                             action="list_all",
                             thumbnail=get_thumb('premieres', auto=True),
                             url=xhr_list, page=0, tipo='estrenos',
-                            tmod=mod
+                            tmod=mod, plot=item.plot
                             ))
 
-    itemlist.append(item.clone(channel=item.channel,title="Más Vistas",
+    itemlist.append(Item(channel=item.channel,title="Más Vistas",
                     action="list_all",
                     thumbnail=get_thumb('more_watched', auto=True),
                     url=xhr_list, page=0, tipo=listpar[1][type_content],
-                    tmod=mod
+                    tmod=mod, plot=item.plot
                     ))
     if type_content == 0:
-        itemlist.append(item.clone(channel=item.channel,title="Tendencias",
+        itemlist.append(Item(channel=item.channel,title="Tendencias",
                         action="list_all",
                         thumbnail=get_thumb('more_voted', auto=True),
                         url=xhr_list, page=0, tipo='peliculas-tendencias',
-                        tmod=mod
+                        tmod=mod, plot=item.plot
                         ))
     if type_content != 0:
-        itemlist.append(item.clone(channel=item.channel,title="Nuevos Capitulos",
+        itemlist.append(Item(channel=item.channel,title="Nuevos Capitulos",
                         action="list_all",
                         thumbnail=get_thumb('new episodes', auto=True),
                         url=xhr_list, page=0, tipo='nuevos-capitulos',
-                        tmod=mod
+                        tmod=mod, plot=item.plot
                         ))
 
-    itemlist.append(item.clone(channel=item.channel, title="Por Género",
+    itemlist.append(Item(channel=item.channel, title="Por Género",
                          action="seccion",
                          thumbnail=get_thumb('genres', auto=True),
                          url=host, page=0, tipo=listpar[2][type_content],
-                         tmod=mod
+                         tmod=mod, plot=item.plot
                         ))
 
-    itemlist.append(item.clone(channel=item.channel,title="Por Año",
+    itemlist.append(Item(channel=item.channel,title="Por Año",
                     action="seccion",
                     thumbnail=get_thumb('year', auto=True),
                     url=host, page=0, tipo=listpar[0][type_content],
-                    tmod=mod
+                    tmod=mod, plot=item.plot
                     ))
     if type_content != 0:
-        itemlist.append(item.clone(channel=item.channel,title="Por Canal",
+        itemlist.append(Item(channel=item.channel,title="Por Canal",
                         action="seccion",
                         thumbnail=get_thumb('tvshows', auto=True),
                         url=host, page=0, tipo='networkSeries',
-                        tmod=mod
+                        tmod=mod, plot=item.plot
                         ))
 
-    itemlist.append(item.clone(channel=item.channel,title="Buscar",
+    itemlist.append(Item(channel=item.channel,title="Buscar",
                     action="search", page=0, tmod=mod,
                     url=host+'buscar/?txt=', tipo=listpar[3][type_content],
-                    thumbnail=get_thumb('search', auto=True),
+                    thumbnail=get_thumb('search', auto=True), plot=item.plot
                     ))
 
     autoplay.show_option(item.channel, itemlist)
 
-    itemlist.append(item.clone(channel=item.channel,title="[COLOR grey]Cambiar a Modo %s[/COLOR]" % alt_mod,
-                    action="switchmod",
-                    url='', tcont=type_content,
-                    thumbnail=get_thumb('update.png', "thumb_")
-                    ))
+    #No series
+    # itemlist.append(Item(channel=item.channel,title="[COLOR grey]Cambiar a Modo %s[/COLOR]" % alt_mod,
+    #                 action="switchmod", plot=item.plot,
+    #                 url='', tcont=type_content,
+    #                 thumbnail=get_thumb('update.png', "thumb_")
+    #                 ))
     return itemlist
 
 
@@ -134,6 +144,10 @@ def get_source(url, post=None, ctype=None):
     headers = {"Cookie": "tipo_contenido=%s" % ctype}
 
     data = httptools.downloadpage(url, post=post).data
+
+    if 'Javascript is required' in data:
+        js2py_conversion(data)
+        data = httptools.downloadpage(url, post=post).data
     data = re.sub(r'\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
     return data
 
@@ -141,7 +155,7 @@ def list_all(item):
     logger.info()
     itemlist = []
     
-    post = "tipo=%s&pagina=%d" % (item.tipo, item.page)
+    post = "tipo=%s&pagina=%s" % (item.tipo, item.page)
     if item.adicional:
         post+= '&adicional=%s' % item.adicional
 
@@ -223,8 +237,7 @@ def seccion(item):
         prefix = '<div class="networks">'
     data = get_source(item.url+item.tmod+'/', ctype=item.tmod)
     data = scrapertools.find_single_match(data, '%s(.*?)</div>' % prefix)
-
-    patron = '<li><a href="([^"]+)".*?>(.*?)</a></li>'
+    patron = '<li\s*><a href="([^"]+)".*?>(.*?)</a></li>'
 
     matches = re.compile(patron, re.DOTALL).findall(data)
 
@@ -310,9 +323,11 @@ def episodesxseason(item):
         if not ',' in scrapedlangs:
             language = " (%s)" % IDIOMAS.get(scrapedlangs, scrapedlangs)
             if direct_play:
+                if config.get_setting('unify'):
+                    title += "[COLOR grey] (Autoplay)[/COLOR]"
                 scrapedurls = scrapertools.find_single_match(scrapedurls, 'data-url-%s="([^"]+)"' % scrapedlangs)
                 action = 'play'
-                server = 'openload'
+                server = servertools.get_server_from_url(scrapedurls)
                 if item.extra:
                     action = 'findvideos'
         else:
@@ -330,7 +345,9 @@ def episodesxseason(item):
             if direct_play:
                 scrapedurls = scrapertools.find_single_match(scrapedurls, 'data-url-%s="([^"]+)"' % prio)
                 action = 'play'
-                server = 'openload'
+                if config.get_setting('unify'):
+                    title += "[COLOR grey] (Autoplay)[/COLOR]"
+                server = servertools.get_server_from_url(scrapedurls)
                 if item.extra:
                     action = 'findvideos'
         infoLabels['episode'] = scrapedep
@@ -406,7 +423,7 @@ def findvideos(item):
                 itemlist.append(Item(channel=item.channel,
                         url='',
                         title= title,
-                        contentTitle=item.title,
+                        contentTitle=item.contentTitle,
                         action='play',
                         infoLabels = item.infoLabels,
                         server=server,
@@ -426,12 +443,12 @@ def findvideos(item):
                 continue
             scrapedlang = scrapedlang.replace('-', '_')
             language = IDIOMAS.get(scrapedlang, scrapedlang)
-            server = 'openload'
+            server = servertools.get_server_from_url(scrapedurl)
             title = '%s[COLOR springgreen] (%s)[/COLOR]' % (server.capitalize(), language)
             itemlist.append(Item(channel=item.channel,
                         url=scrapedurl,
                         title= title,
-                        contentSerieName=item.title,
+                        contentSerieName=item.contentSerieName,
                         action='play',
                         infoLabels = item.infoLabels,
                         server=server,
@@ -452,6 +469,7 @@ def findvideos(item):
                  title='[COLOR yellow]Añadir esta pelicula a la videoteca[/COLOR]',
                  url=item.url,
                  action="add_pelicula_to_library",
+                 content_id=item.content_id,
                  extra="findvideos",
                  contentTitle=item.contentTitle,
                  ))
@@ -466,3 +484,48 @@ def play(item):
         item.url = new_data['url'].rstrip()
         item.url = item.url.replace(' ', '%20')
     return [item]
+
+def js2py_conversion(data):
+    logger.info()
+    from lib import js2py
+    import base64
+        
+    patron = ",\s*S='([^']+)'"
+    data_new = scrapertools.find_single_match(data, patron)
+
+    if not data_new:
+        logger.error('js2py_conversion: NO data_new')
+        
+    try:
+        for x in range(10):                                          # Da hasta 10 pasadas o hasta que de error
+            data_end = base64.b64decode(data_new).decode('utf-8')
+            data_new = data_end
+    except:
+        js2py_code = data_new
+    else:
+        logger.error('js2py_conversion: base64 data_new NO Funciona: ' + str(data_new))
+    
+    if not js2py_code:
+        logger.error('js2py_conversion: NO js2py_code BASE64')
+        
+    js2py_code = js2py_code.replace('document', 'window').replace(" location.reload();", "")
+    js2py.disable_pyimport()
+    context = js2py.EvalJs({'atob': atob})
+    new_cookie = context.eval(js2py_code)
+    
+    logger.info('new_cookie: ' + new_cookie)
+
+    dict_cookie = {'domain': ".cliver.to",
+                }
+
+    if ';' in new_cookie:
+        new_cookie = new_cookie.split(';')[0].strip()
+        namec, valuec = new_cookie.split('=')
+        dict_cookie['name'] = namec.strip()
+        dict_cookie['value'] = valuec.strip()
+    zanga = httptools.set_cookies(dict_cookie)
+    
+    
+def atob(s):
+    import base64
+    return base64.b64decode(s.to_string().value)

@@ -3,12 +3,24 @@
 # Configuracion
 # ------------------------------------------------------------
 
+from __future__ import division
+#from builtins import str
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+from builtins import range
+from past.utils import old_div
+
 from channelselector import get_thumb
 from core import filetools
 from core import servertools
 from core.item import Item
 from platformcode import config, logger
 from platformcode import platformtools
+
+from core import httptools
+import xbmcgui
+import re
 
 CHANNELNAME = "setting"
 
@@ -67,7 +79,12 @@ def menu_channels(item):
     for channel in channel_list:
         if not channel.channel:
             continue
+        
         channel_parameters = channeltools.get_channel_parameters(channel.channel)
+
+        if channel_parameters["adult"] and not config.get_setting("adult_mode"):
+            continue
+        
         if channel_parameters["has_settings"]:
             itemlist.append(Item(channel=CHANNELNAME, title=".    " + config.get_localized_string(60547) % channel.title,
                                  action="channel_config", config=channel.channel, folder=False,
@@ -94,10 +111,15 @@ def setting_torrent(item):
     default = config.get_setting("torrent_client", server="torrent", default=0)
     BUFFER = config.get_setting("mct_buffer", server="torrent", default="50")
     DOWNLOAD_PATH = config.get_setting("mct_download_path", server="torrent", default=config.get_setting("downloadpath"))
+    if not DOWNLOAD_PATH: DOWNLOAD_PATH = filetools.join(config.get_data_path(), 'downloads')
     BACKGROUND = config.get_setting("mct_background_download", server="torrent", default=True)
     RAR = config.get_setting("mct_rar_unpack", server="torrent", default=True)
+    DOWNLOAD_LIMIT = config.get_setting("mct_download_limit", server="torrent", default="")
     BUFFER_BT = config.get_setting("bt_buffer", server="torrent", default="50")
     DOWNLOAD_PATH_BT = config.get_setting("bt_download_path", server="torrent", default=config.get_setting("downloadpath"))
+    if not DOWNLOAD_PATH_BT: DOWNLOAD_PATH_BT = filetools.join(config.get_data_path(), 'downloads')
+    MAGNET2TORRENT = config.get_setting("magnet2torrent", server="torrent", default=False)
+    CAPTURE_THRU_ROWSER_PATH = config.get_setting("capture_thru_browser_path", server="torrent", default="")
 
     torrent_options = [config.get_localized_string(30006), config.get_localized_string(70254), config.get_localized_string(70255)]
     torrent_options.extend(platformtools.torrent_client_installed())
@@ -162,6 +184,14 @@ def setting_torrent(item):
             "visible": "eq(-4,%s)" % torrent_options[1]
         },
         {
+            "id": "mct_download_limit",
+            "type": "text",
+            "label": "Límite (en Kb's) de la velocidad de descarga en segundo plano (NO afecta a RAR)",
+            "default": DOWNLOAD_LIMIT,
+            "enabled": True,
+            "visible": "eq(-5,%s) | eq(-5,%s)" % (torrent_options[1], torrent_options[2])
+        },
+        {
             "id": "mct_rar_unpack",
             "type": "bool",
             "label": "¿Quiere que se descompriman los archivos RAR y ZIP para su reproducción?",
@@ -176,11 +206,31 @@ def setting_torrent(item):
             "default": BACKGROUND,
             "enabled": True,
             "visible": True
+        },
+        {
+            "id": "magnet2torrent",
+            "type": "bool",
+            "label": "¿Quiere convertir los Magnets a Torrents para ver tamaños y almacenarlos?",
+            "default": MAGNET2TORRENT,
+            "enabled": True,
+            "visible": True
+        },
+        {
+            "id": "capture_thru_browser_path",
+            "type": "text",
+            "label": "Path para descargar con un browser archivos .torrent bloqueados",
+            "default": CAPTURE_THRU_ROWSER_PATH,
+            "enabled": True,
+            "visible": True
         }
     ]
 
     platformtools.show_channel_settings(list_controls=list_controls, callback='save_setting_torrent', item=item,
                                         caption=config.get_localized_string(70257), custom_button={'visible': False})
+    if item.item_org:
+        item_org = Item().fromurl(item.item_org)
+        if item_org.torrent_info: del item_org.torrent_info
+        platformtools.itemlist_update(item_org)
 
 
 def save_setting_torrent(item, dict_data_saved):
@@ -194,10 +244,16 @@ def save_setting_torrent(item, dict_data_saved):
         config.set_setting("mct_background_download", dict_data_saved["mct_background_download"], server="torrent")
     if dict_data_saved and "mct_rar_unpack" in dict_data_saved:
         config.set_setting("mct_rar_unpack", dict_data_saved["mct_rar_unpack"], server="torrent")
+    if dict_data_saved and "mct_download_limit" in dict_data_saved:
+        config.set_setting("mct_download_limit", dict_data_saved["mct_download_limit"], server="torrent")
     if dict_data_saved and "bt_buffer" in dict_data_saved:
         config.set_setting("bt_buffer", dict_data_saved["bt_buffer"], server="torrent")
     if dict_data_saved and "bt_download_path" in dict_data_saved:
         config.set_setting("bt_download_path", dict_data_saved["bt_download_path"], server="torrent")
+    if dict_data_saved and "magnet2torrent" in dict_data_saved:
+        config.set_setting("magnet2torrent", dict_data_saved["magnet2torrent"], server="torrent")
+    if dict_data_saved and "capture_thru_browser_path" in dict_data_saved:
+        config.set_setting("capture_thru_browser_path", dict_data_saved["capture_thru_browser_path"], server="torrent")
 
 def menu_servers(item):
     logger.info()
@@ -214,7 +270,7 @@ def menu_servers(item):
 
     # Inicio - Servidores configurables
 
-    server_list = servertools.get_debriders_list().keys()
+    server_list = list(servertools.get_debriders_list().keys())
     for server in server_list:
         server_parameters = servertools.get_server_parameters(server)
         if server_parameters["has_settings"]:
@@ -225,13 +281,12 @@ def menu_servers(item):
     itemlist.append(Item(channel=CHANNELNAME, title=config.get_localized_string(60554),
                          action="", folder=False, text_bold = True, thumbnail=get_thumb("setting_0.png")))
 
-    server_list = servertools.get_servers_list().keys()
+    server_list = list(servertools.get_servers_list().keys())
 
     for server in sorted(server_list):
         server_parameters = servertools.get_server_parameters(server)
         logger.info(server_parameters)
-        if server_parameters["has_settings"] and filter(lambda x: x["id"] not in ["black_list", "white_list"],
-                                                        server_parameters["settings"]):
+        if server_parameters["has_settings"] and [x for x in server_parameters["settings"] if x["id"] not in ["black_list", "white_list"]]:
             itemlist.append(
                 Item(channel=CHANNELNAME, title=".    " + config.get_localized_string(60553) % server_parameters["name"],
                      action="server_config", config=server, folder=False, thumbnail=""))
@@ -281,7 +336,7 @@ def cb_servers_blacklist(item, dict_values):
     progreso = platformtools.dialog_progress(config.get_localized_string(60557), config.get_localized_string(60558))
     n = len(dict_values)
     i = 1
-    for k, v in dict_values.items():
+    for k, v in list(dict_values.items()):
         if k == 'filter_servers':
             config.set_setting('filter_servers', v)
         else:
@@ -289,7 +344,7 @@ def cb_servers_blacklist(item, dict_values):
             if v:  # Si el servidor esta en la lista negra no puede estar en la de favoritos
                 config.set_setting("favorites_servers_list", 100, server=k)
                 f = True
-                progreso.update((i * 100) / n, config.get_localized_string(60559) % k)
+                progreso.update(old_div((i * 100), n), config.get_localized_string(60559) % k)
         i += 1
 
     if not f:  # Si no hay ningun servidor en la lista, desactivarla
@@ -343,21 +398,21 @@ def cb_servers_favorites(server_names, dict_values):
     dict_name = {}
     progreso = platformtools.dialog_progress(config.get_localized_string(60557), config.get_localized_string(60558))
 
-    for i, v in dict_values.items():
+    for i, v in list(dict_values.items()):
         if i == "favorites_servers":
             config.set_setting("favorites_servers", v)
         elif int(v) > 0:
             dict_name[server_names[v]] = int(i)
 
-    servers_list = servertools.get_servers_list().items()
+    servers_list = list(servertools.get_servers_list().items())
     n = len(servers_list)
     i = 1
     for server, server_parameters in servers_list:
-        if server_parameters['name'] in dict_name.keys():
+        if server_parameters['name'] in list(dict_name.keys()):
             config.set_setting("favorites_servers_list", dict_name[server_parameters['name']], server=server)
         else:
             config.set_setting("favorites_servers_list", 0, server=server)
-        progreso.update((i * 100) / n, config.get_localized_string(60559) % server_parameters['name'])
+        progreso.update(old_div((i * 100), n), config.get_localized_string(60559) % server_parameters['name'])
         i += 1
 
     if not dict_name:  # Si no hay ningun servidor en lalista desactivarla
@@ -547,7 +602,7 @@ def conf_tools(item):
                         channeljson_exists = True
                         # Obtenemos configuracion guardada de ../settings/channel_data.json
                         try:
-                            dict_file = jsontools.load(open(file_settings, "rb").read())
+                            dict_file = jsontools.load(filetools.read(file_settings))
                             if isinstance(dict_file, dict) and 'settings' in dict_file:
                                 dict_settings = dict_file['settings']
                         except EnvironmentError:
@@ -587,14 +642,9 @@ def conf_tools(item):
                                 dict_settings = default_settings
                                 dict_file['settings'] = dict_settings
                                 # Creamos el archivo ../settings/channel_data.json
-                                json_data = jsontools.dump(dict_file)
-                                try:
-                                    open(file_settings, "wb").write(json_data)
-                                    # logger.info(channel.channel + " - Archivo _data.json GUARDADO!")
-                                    # El channel_data.json se ha creado/modificado
-                                    list_status = config.get_localized_string(60560)
-                                except EnvironmentError:
+                                if not filetools.write(file_settings, jsontools.dump(dict_file), silent=True):
                                     logger.error("ERROR al salvar el archivo: %s" % file_settings)
+                                list_status = config.get_localized_string(60560)
                             else:
                                 if default_settings is None:
                                     list_status = config.get_localized_string(60571)
@@ -666,7 +716,7 @@ def channels_onoff(item):
     ret = platformtools.dialog_select(config.get_localized_string(60545), preselecciones)
     if ret == -1: return False # pedido cancel
     if ret == 2: preselect = []
-    elif ret == 1: preselect = range(len(ids))
+    elif ret == 1: preselect = list(range(len(ids)))
     else:
         preselect = []
         for i, canal in enumerate(ids):
@@ -818,7 +868,7 @@ def overwrite_tools(item):
                                                                                    movie.channel.capitalize()))
                 # ... y la volvemos a añadir
                 videolibrarytools.save_movie(movie)
-            except Exception, ex:
+            except Exception as ex:
                 logger.error("Error al crear de nuevo la película")
                 template = "An exception of type %s occured. Arguments:\n%r"
                 message = template % (type(ex).__name__, ex.args)
@@ -870,20 +920,32 @@ def report_menu(item):
         itemlist.append(Item(channel=item.channel, action="", 
                     title="[COLOR limegreen]Ha terminado de generar el informe de fallo,[/COLOR]", 
                     thumbnail=thumb_next, folder=False))
-        itemlist.append(Item(channel=item.channel, action="", 
-                    title="[COLOR limegreen]Repórtelo en el Foro de Alfa: [/COLOR][COLOR yellow](pinche si Chrome)[/COLOR]", 
+        browser, res = call_browser(item, lookup=True)
+        if browser:
+            itemlist.append(Item(channel=item.channel, action="", 
+                    title="[COLOR limegreen]Repórtelo en el Foro de Alfa: [/COLOR][COLOR yellow](pinche para usar [I]%s[/I])[/COLOR]" % browser, 
                     thumbnail=thumb_next, 
-                    folder=False))        
-        itemlist.append(Item(channel=item.channel, action="call_chrome", 
-                    url='https://alfa-addon.com/foros/ayuda.12/', 
-                    title="**- [COLOR yellow]https://alfa-addon.com/foros/ayuda.12/[/COLOR] -**", 
-                    thumbnail=thumb_next, unify=False, folder=False))
-    
-        if item.one_use:
+                    folder=False))
+        else:
+            itemlist.append(Item(channel=item.channel, action="", 
+                    title="[COLOR limegreen]Repórtelo en el Foro de Alfa: [/COLOR]", 
+                    thumbnail=thumb_next, 
+                    folder=False))
+        if not browser:
             action = ''
             url = ''
         else:
-            action = 'call_chrome'
+            action = 'call_browser'
+            url='https://alfa-addon.com/foros/ayuda.12/'
+        itemlist.append(Item(channel=item.channel, action=action, url=url, 
+                    title="**- [COLOR yellow]https://alfa-addon.com/foros/ayuda.12/[/COLOR] -**", 
+                    thumbnail=thumb_next, unify=False, folder=False))
+    
+        if item.one_use or not browser:
+            action = ''
+            url = ''
+        else:
+            action = 'call_browser'
             url = item.url
         itemlist.append(Item(channel=item.channel, action=action, 
                     title="**- LOG: [COLOR gold]%s[/COLOR] -**" % item.url, url=url, 
@@ -920,13 +982,17 @@ def report_send(item, description='', fatal=False):
     import xbmc
     import xbmcaddon
     import random
-    import urllib
-    import urlparse
     import traceback
-    import sys
-    import platform
-    import os
     import re
+    
+    if PY3:
+        #from future import standard_library
+        #standard_library.install_aliases()
+        import urllib.parse as urlparse                         # Es muy lento en PY2.  En PY3 es nativo
+        import urllib.parse as urllib
+    else:
+        import urllib                                           # Usamos el nativo de PY2 que es más rápido
+        import urlparse
 
     try:
         requests_status = True
@@ -935,8 +1001,11 @@ def report_send(item, description='', fatal=False):
         requests_status = False
         logger.error(traceback.format_exc())
     
-    from core import jsontools, httptools, proxytools, scrapertools
+    from core import jsontools, httptools, scrapertools
     from platformcode import envtal
+    
+    if not PY3: from core import proxytools
+    else: from core import proxytools_py3 as proxytools
     
     # Esta función realiza la operación de upload del LOG.  El tamaño del archivo es de gran importacia porque
     # los servicios de "pastebin" gratuitos tienen limitaciones, a veces muy bajas.
@@ -1006,7 +1075,10 @@ def report_send(item, description='', fatal=False):
     var = proxytools.logger_disp(debugging=True)
     environment = envtal.list_env()
     if not environment['log_path']:
-        environment['log_path'] = str(filetools.join(xbmc.translatePath("special://logpath/"), 'kodi.log'))
+        if filetools.exists(filetools.join("special://logpath/", 'kodi.log')):
+            environment['log_path'] = str(filetools.join("special://logpath/", 'kodi.log'))
+        else:
+            environment['log_path'] = str(filetools.join("special://logpath/", 'xbmc.log'))
         environment['log_size_bytes'] = str(filetools.getsize(environment['log_path']))
         environment['log_size'] = str(round(float(environment['log_size_bytes']) / (1024*1024), 3))
     
@@ -1029,13 +1101,14 @@ def report_send(item, description='', fatal=False):
         log_data = '%s\n%s\n\n%s' %(log_title, description, log_data)
     
     # Se aleatorizan los nombre de los servidores "patebin"
-    for label_a, value_a in pastebin_list.items():
+    for label_a, value_a in list(pastebin_list.items()):
         if label_a not in pastebin_list_last:
             pastebin_dir.append(label_a)
     random.shuffle(pastebin_dir)
     pastebin_dir.extend(pastebin_list_last)                             # Estos servicios los dejamos los últimos
     
-    #pastebin_dir = ['file.io']                                          # Para pruebas de un servicio
+    #pastebin_dir = ['uploadfiles']                                      # Para pruebas de un servicio
+    #log_data = 'TEST PARA PRUEBAS DEL SERVICIO'
         
     # Se recorre la lista de servidores "pastebin" hasta localizar uno activo, con capacidad y disponibilidad
     for paste_name in pastebin_dir:
@@ -1198,9 +1271,31 @@ def report_send(item, description='', fatal=False):
     return report_menu(item)
     
     
-def call_chrome(item):
+def call_browser(item, lookup=False):
     from lib import generictools
 
-    resultado = generictools.call_chrome(item.url)
+    if lookup:
+        browser, resultado = generictools.call_browser(item.url, lookup=lookup)
+    else:
+        browser, resultado = generictools.call_browser(item.url)
     
-    return resultado
+    return browser, resultado
+
+
+def icon_set_selector(item=None):
+    platformtools.dialog_notification("Alfa", "Obteniendo iconos, por favor espere...")
+    options = list()
+    data = httptools.downloadpage("https://github.com/alfa-addon/media/tree/master/themes").data
+    patron = '<a class="js-navigation-open link-gray-dark" title="([^"]+)"'
+    matches = re.compile(patron, re.DOTALL).findall(data)
+
+    for set_id in matches:
+        path_demo = "https://github.com/alfa-addon/media/raw/master/themes/%s/thumb_channels_movie.png" % set_id
+        path_info = "https://github.com/alfa-addon/media/raw/master/themes/%s/README.md" % set_id
+        opt = xbmcgui.ListItem(set_id.title(), httptools.downloadpage(path_info).data)
+        opt.setArt({"thumb": path_demo})
+        options.append(opt)
+
+    ret = platformtools.dialog_select("Selecciona un Set de iconos", options, useDetails=True)
+    if ret != -1:
+        config.set_setting("icon_set", matches[ret])

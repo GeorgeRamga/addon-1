@@ -1,5 +1,9 @@
 # -*- coding: utf-8 -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
 import re
 
 from core import httptools
@@ -15,7 +19,7 @@ from channelselector import get_thumb
 
 
 IDIOMAS = {'latino': 'LAT', 'subtitulado': 'VOSE'}
-list_language = IDIOMAS.values()
+list_language = list(IDIOMAS.values())
 list_quality = ['CAM', '360p', '480p', '720p', '1080p']
 list_servers = ['vidlox', 'fembed', 'vidcolud', 'streamango', 'openload']
 
@@ -136,7 +140,10 @@ def seccion(item):
     matches = scrapertools.find_multiple_matches(data, patron)
     if item.seccion != 'actor':
         for scrapedurl, scrapedtitle in matches:
-            title = scrapedtitle.decode('utf-8')
+            if not PY3:
+                title = scrapedtitle.decode('utf-8')
+            else:
+                title = scrapedtitle
             thumbnail = ''
             fanart = ''
             url = host + scrapedurl
@@ -145,7 +152,7 @@ def seccion(item):
                 Item(channel=item.channel,
                      action="lista",
                      title=title,
-                     fulltitle=item.title,
+                     contentTitle=item.title,
                      url=url,
                      thumbnail=thumbnail,
                      fanart=fanart
@@ -159,7 +166,7 @@ def seccion(item):
             itemlist.append(Item(channel=item.channel,
                                  action="lista",
                                  title=title,
-                                 fulltitle=item.title,
+                                 contentTitle=item.title,
                                  url=url,
                                  thumbnail=scrapedthumbnail,
                                  fanart=fanart,

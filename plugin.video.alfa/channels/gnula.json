@@ -4,7 +4,7 @@
   "active": true,
   "adult": false,
   "language": ["cast", "lat"],
-  "thumbnail": "gnula.png",
+  "thumbnail": "https://i.postimg.cc/Xr4B5LkG/gnula.png",
   "banner": "gnula.png",
   "categories": [
     "movie",
@@ -15,7 +15,7 @@
       "id": "include_in_global_search",
       "type": "bool",
       "label": "Incluir en busqueda global",
-      "default": true,
+      "default": false,
       "enabled": true,
       "visible": true
   }

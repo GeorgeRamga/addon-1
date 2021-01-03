@@ -3,8 +3,18 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+if PY3:
+    import urllib.parse as urlparse                                             # Es muy lento en PY2.  En PY3 es nativo
+    import urllib.parse as urllib
+else:
+    import urlparse                                                             # Usamos el nativo de PY2 que es más rápido
+    import urllib
+
 import re
-import urllib, urlparse
 
 from core import httptools
 from core import scrapertools
@@ -21,7 +31,7 @@ host = "https://hitokin.net/"
 
 
 IDIOMAS = {'VOSE': 'VOSE'}
-list_language = IDIOMAS.values()
+list_language = list(IDIOMAS.values())
 list_quality = []
 list_servers = ['directo', 'okru', 'fembed', 'yourupload', 'rapidvideo', 'streamango']
 
@@ -36,7 +46,7 @@ def mainlist(item):
     itemlist.append(Item(channel=item.channel, title="Nuevos Episodios",
                          action="new_episodes",
                          thumbnail='https://i.imgur.com/IexJg5R.png',
-                         url=host))
+                         url=host+'recientes.php'))
 
     itemlist.append(Item(channel=item.channel, title="Últimos Animes",
                                action="list_all", not_post=True,
@@ -95,13 +105,13 @@ def list_all(item):
     logger.info()
 
     itemlist = []
-    logger.error(item.url)
+
     if item.ar_post and not item.not_post:
       data = get_source(item.url, post=item.ar_post)
     else:
       data = get_source(item.url)
     patron = '<div class="col-6.*?href="([^"]+)".*?>(.*?)<img.*?'#url, info
-    patron += 'src="([^"]+)".*?<p.*?>([^<]+)</p>'#thumb,title
+    patron += 'data-src="([^"]+)".*?<p.*?>([^<]+)</p>'#thumb,title
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for scrapedurl, info, scrapedthumbnail, scrapedtitle in matches:
@@ -192,16 +202,16 @@ def new_episodes(item):
     itemlist = []
 
     full_data = get_source(item.url)
-    data = scrapertools.find_single_match(full_data, 'id="episodios_index">(.*?)>Anuncio</h3>')
+    #data = scrapertools.find_single_match(full_data, 'id="episodios_index">(.*?)>Anuncio</h3>')
     
     patron = '<div class="col-6.*?href="([^"]+)">.*?>isodio</span> (\d+)<.*?'
-    patron += 'src="([^"]+)".*?<p.*?>([^<]+)</p>'
-    matches = re.compile(patron, re.DOTALL).findall(data)
+    patron += 'data-src="([^"]+)".*?<p.*?>([^<]+)</p>'
+    matches = re.compile(patron, re.DOTALL).findall(full_data)
 
     for scrapedurl, epi, scrapedthumbnail, scrapedtitle in matches:
         url = host+scrapedurl
         lang = 'VOSE'
-        title = '%s - %s' % (scrapedtitle, epi)
+        title = '%s: 1x%s' % (scrapedtitle, epi)
         itemlist.append(Item(channel=item.channel, title=title, url=url, thumbnail=scrapedthumbnail,
                              action='findvideos', contentSerieName=scrapedtitle, language=lang))
     tmdb.set_infoLabels(itemlist, seekTmdb=True)
@@ -211,9 +221,9 @@ def episodios(item):
     logger.info()
     itemlist = []
 
-    data = get_source(item.url)
+    data = httptools.downloadpage(item.url).data
 
-    list_episodes = eval(scrapertools.find_single_match(data, 'var episodios = (.*?);'))
+    list_episodes = eval(scrapertools.find_single_match(data, r'var episodios = (.*?),\s'))
 
 
     infoLabels = item.infoLabels
@@ -246,7 +256,9 @@ def findvideos(item):
     logger.info()
     servers_l = {'sm': 'streamango',
               'natsuki': 'directo',
-              'media': 'directo'}
+              'izanagui': 'directo',
+              'media': 'mediafire',
+              'streamium': 'oprem'}
     itemlist = []
     p_data = ""
 
@@ -259,12 +271,14 @@ def findvideos(item):
     for name, value in matches0:
         p_data += '%s=%s&' % (name, value)
     p_data = urllib.quote(p_data)
-    patron = 'data-tipo="(\d+)" data-.*?title="([^"]+)"'
+    patron = 'data-tipo="(\d+)".*?title="([^"]+)"'
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for p_servidor,scrapedtitle in matches:
         server = ""
+
         scrapedurl = '%s%s.php' % (host, p_seccion)
+        logger.error(scrapedurl)
         '''post = {'seccion': p_seccion,
                 'data': p_data,
                 'nombre': p_nombre,
@@ -302,8 +316,14 @@ def play(item):
             url = scrapertools.find_single_match(data, 'src="([^"]+)"')
             if not url.startswith('http'):
                 url = 'http:'+url
+            #parchear enlace mediafire
+            if 'mediafire' in url and not '/file/' in url:
+                url = re.sub('://(.*?)\.mediafire', "://www.mediafire", url)
+                url = re.sub('\.mediafire.*?/(\w+)/', ".mediafire.com/file/", url)
+            elif 'streamium' in url and not '/files/' in url:
+                _hash = scrapertools.find_single_match(url, 'hash=([a-zA-Z0-9]+)')
+                url = 'http://streamium.xyz/files/%s' % _hash
             item.url = url
-            #item.server = servertools.get_server_from_url(url)
         else:
             item.url = ''
             logger.error(mess)

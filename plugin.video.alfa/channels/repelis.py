@@ -3,6 +3,10 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
 from channelselector import get_thumb
 from channels import autoplay
 from channels import filtertools
@@ -18,14 +22,14 @@ from platformcode import config, logger, platformtools
 idio = {'es-mx': 'LAT','es-es': 'ESP','en': 'VO'}
 cali = {'poor': 'SD','low': 'SD','medium': 'HD','high': 'HD'}
 
-list_language = idio.values()
+list_language = list(idio.values())
 list_quality = ["SD","HD"]
 list_servers = ['rapidvideo', 'streamango', 'fastplay', 'openload', 'netu', 'vidoza', 'uptobox']
 
 
 __channel__='repelis'
 
-host = "https://repelisgo.com"
+host = "https://repelis.io"
 
 try:
     __modo_grafico__ = config.get_setting('modo_grafico', __channel__)
@@ -146,14 +150,22 @@ def newest(categoria):
 
 def search(item, texto):
     logger.info()
+
+    texto = texto.replace(" ", "+")
     item.url = item.url + texto
+
     item.extra = "busca"
     item.page = 1
     item.texto = texto
     item.post = {"query":"\n          query ($term: String) {\n            movies: allMovies(search: $term) {\n              id\n              slug\n              title\n              rating\n              releaseDate\n              released\n              poster\n              nowPlaying\n            }\n          }\n        ","variables":{"term":"%s" %texto}}
-    if texto != '':
+    try:
         return peliculas(item)
-    else:
+
+    # Se captura la excepción, para no interrumpir al buscador global si un canal falla
+    except:
+        import sys
+        for line in sys.exc_info():
+            logger.error("{0}".format(line))
         return []
 
 
@@ -225,6 +237,8 @@ def play(item):
     itemlist = []
     #headers = {"}
     url1 = httptools.downloadpage(host + item.url, follow_redirects=False, only_headers=True).headers.get("location", "")
+    if "repelis" in url1:
+        url1 = httptools.downloadpage(url1, follow_redirects=False, only_headers=True).headers.get("location", "")
     itemlist.append(item.clone(url=url1))
     itemlist = servertools.get_servers_itemlist(itemlist)
     itemlist[0].thumbnail = item.contentThumbnail

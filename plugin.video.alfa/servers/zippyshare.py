@@ -37,14 +37,10 @@ def get_video_url(page_url, premium=False, user="", password="", video_password=
     match = re.search('(.+)/v/(\w+)/file.html', page_url)
     domain = match.group(1)
     patron = 'getElementById\(\'dlbutton\'\).href\s*=\s*"(.*?)";'
-    a = scrapertools.find_single_match(data, '<div class="download"></div>.*?var a = (\d+)')
-    a = math.floor(int(a)/3)
-    b = scrapertools.find_single_match(data, '<div class="download"></div>.*?var b = (\d+)')
     media_url = scrapertools.find_single_match(data, patron)
-    numbers = scrapertools.find_single_match(media_url, '\((.*?)\)')
-    numbers1 = numbers.replace("a", str(int(a))).replace("b", str(int(b)))
-    url = media_url.replace('"+(' + numbers + ')+"', '%s' %eval(numbers1))
-
+    cadena = scrapertools.find_single_match(media_url, '"\+.*?\+"')
+    numbers = eval( scrapertools.find_single_match(media_url, '\((.*?\ )') ) + 11
+    url = media_url.replace(cadena, '%s' %(numbers))
     mediaurl = '%s%s' % (domain, url)
     extension = "." + mediaurl.split('.')[-1]
     video_urls.append([extension + " [zippyshare]", mediaurl])

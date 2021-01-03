@@ -3,9 +3,16 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+if PY3:
+    import urllib.parse as urlparse                                             # Es muy lento en PY2.  En PY3 es nativo
+else:
+    import urlparse                                                             # Usamos el nativo de PY2 que es más rápido
+
 import re
-import urllib
-import urlparse
 
 from channelselector import get_thumb
 from core import httptools
@@ -16,7 +23,7 @@ from core.item import Item
 from platformcode import config, logger
 from core import tmdb
 
-host = "https://fanpelis.net/"
+host = "https://fanpelis.org/"
 
 def mainlist(item):
     logger.info()
@@ -163,7 +170,10 @@ def list_all(item):
     if item.texto != '':
         next_page = host + 'page/%s/' % (int(active_page) + 1)
     else:
-        next_page = item.url +'page/%s/' % (int (active_page) + 1)
+        if not 'page/' in item.url:
+            next_page = item.url +'page/%s/' % (int (active_page) + 1)
+        else:
+            next_page = re.sub(r'page\/\d+\/', 'page/%s/' % (int (active_page) + 1), item.url)
 
     if next_page:
 
@@ -232,7 +242,8 @@ def episodesxseason(item):
     for scrapedurl, scrapedtitle in matches:
         epi = str(ep)
         title = season + 'x%s - Episodio %s' % (epi, epi)
-        url = scrapedurl
+        #url = scrapedurl
+        url = urlparse.urljoin(host, scrapedurl)
         contentEpisodeNumber = epi
         item.infoLabels['episode'] = contentEpisodeNumber
         itemlist.append(item.clone(action='findvideos',
@@ -247,22 +258,23 @@ def episodesxseason(item):
 
 def findvideos(item):
     logger.info()
-    import urllib
 
     itemlist = []
+    urls = []
+    from lib import players_parse
 
     data = get_source(item.url)
-    player = scrapertools.find_single_match(data, "({'action': 'movie_player','foobar_id':\d+,})")
-    post = eval(player)
-    post = urllib.urlencode(post)
-    data = httptools.downloadpage(host+'wp-admin/admin-ajax.php', post=post, headers={'Referer':item.url}).data
     data = re.sub(r'\n|\r|\t|&nbsp;|<br>|\s{2,}', "", data)
-    patron = 'data-url="([^"]+)"'
-
+    patron = 'data-url="([^"]+)" class="[^"]+">(.*?)<\/a'
+    
     matches = re.compile(patron, re.DOTALL).findall(data)
 
-    for url in matches:
-        itemlist.append(Item(channel=item.channel, title='%s', url=url, action='play', infoLabels=item.infoLabels))
+    for url, server in matches:
+        url = players_parse.player_parse(url, server, 'https://www.fembed.com')
+        if url not in urls:
+            itemlist.append(Item(channel=item.channel, title='%s', url=url, action='play', infoLabels=item.infoLabels))
+            urls.append(url)
+    
     itemlist = servertools.get_servers_itemlist(itemlist, lambda i: i.title % i.server)
 
     if config.get_videolibrary_support() and len(itemlist) > 0 and item.extra != 'findvideos':

@@ -15,8 +15,19 @@
       "type": "bool",
       "label": "Incluir en busqueda global",
       "default": false,
-      "enabled": false,
-      "visible": false
+      "enabled": true,
+      "visible": true
+    },
+    {
+      "id": "filter_languages",
+      "type": "list",
+      "label": "Mostrar enlaces en idioma...",
+      "default": 0,
+      "enabled": true,
+      "visible": true,
+      "lvalues": [
+        "No filtrar"
+      ]
     }
   ]
 }

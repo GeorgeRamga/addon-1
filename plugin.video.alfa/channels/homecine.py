@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
 import re
-import urllib
-import urlparse
 
 from channels import autoplay
 from channels import filtertools
@@ -15,12 +17,12 @@ from core.item import Item
 from platformcode import config, logger
 from channelselector import get_thumb
 
-IDIOMAS = {'Latino': 'LAT', 'Castellano': 'CAST', 'Subtitulado': 'VOSE'}
-list_language = IDIOMAS.values()
+IDIOMAS = {'Latino': 'LAT', 'Castellano': 'CAST', 'Subtitulado': 'VOSE', 'Ingles': 'VO'}
+list_language = list(IDIOMAS.values())
 list_quality = ['HD 720p', 'HD 1080p', '480p', '360p']
 list_servers = ['cinemaupload']
 
-host = 'https://homecine.net'
+host = 'https://homecine.tv'
 
 
 def mainlist(item):
@@ -29,17 +31,21 @@ def mainlist(item):
     autoplay.init(item.channel, list_servers, list_quality)
 
     itemlist = []
+    import datetime
+    c_year = datetime.datetime.now().year
 
     itemlist.append(Item(channel=item.channel, title="Ultimas",
                          action="list_all",
                          thumbnail=get_thumb('last', auto=True),
-                         url='%s%s' % (host, '/release-year/2019'),
+                         url='%s%s%s' % (host, '/release-year/', c_year),
                          first=0
                          ))
 
     itemlist.append(Item(channel=item.channel,title="Películas",
-                    action="sub_menu",
+                    action="list_all",
                     thumbnail=get_thumb('movies', auto=True),
+                    url='%s%s' % (host, '/peliculas/'),
+                    first=0
                     ))
 
     itemlist.append(Item(channel=item.channel,title="Series",
@@ -52,8 +58,15 @@ def mainlist(item):
     itemlist.append(Item(channel=item.channel, title="Documentales",
                          action="list_all",
                          thumbnail=get_thumb('documentaries', auto=True),
-                         url='%s%s' % (host, '/documentales/'),
+                         url='%s%s' % (host, '/genre/documentales/'),
                          first=0
+                         ))
+
+    itemlist.append(Item(channel=item.channel,title="Generos",
+                         action="seccion",
+                         thumbnail=get_thumb('genres', auto=True),
+                         fanart='https://s3.postimg.cc/5s9jg2wtf/generos.png',
+                         url=host,
                          ))
 
     itemlist.append(Item(channel=item.channel,title="Buscar",
@@ -66,35 +79,35 @@ def mainlist(item):
 
     return itemlist
 
-def sub_menu(item):
-    logger.info()
+# def sub_menu(item):
+#     logger.info()
 
-    itemlist = []
+#     itemlist = []
 
 
 
-    itemlist.append(Item(channel=item.channel,title="Todas",
-                         action="list_all",
-                         thumbnail=get_thumb('all', auto=True),
-                         url='%s%s' % (host, '/peliculas/'),
-                         first=0
-                         ))
+#     itemlist.append(Item(channel=item.channel,title="Todas",
+#                          action="list_all",
+#                          thumbnail=get_thumb('all', auto=True),
+#                          url='%s%s' % (host, '/peliculas/'),
+#                          first=0
+#                          ))
 
-    itemlist.append(Item(channel=item.channel, title="Mas vistas",
-                         action="list_all",
-                         thumbnail=get_thumb('more watched', auto=True),
-                         url='%s%s' % (host, '/most-viewed/'),
-                         first=0
-                         ))
+#     itemlist.append(Item(channel=item.channel, title="Mas vistas",
+#                          action="list_all",
+#                          thumbnail=get_thumb('more watched', auto=True),
+#                          url='%s%s' % (host, '/most-viewed/'),
+#                          first=0
+#                          ))
 
-    itemlist.append(Item(channel=item.channel,title="Generos",
-                         action="seccion",
-                         thumbnail=get_thumb('genres', auto=True),
-                         fanart='https://s3.postimg.cc/5s9jg2wtf/generos.png',
-                         url=host,
-                         ))
+#     itemlist.append(Item(channel=item.channel,title="Generos",
+#                          action="seccion",
+#                          thumbnail=get_thumb('genres', auto=True),
+#                          fanart='https://s3.postimg.cc/5s9jg2wtf/generos.png',
+#                          url=host,
+#                          ))
 
-    return itemlist
+#     return itemlist
 
 def get_source(url, referer=None):
     logger.info()
@@ -117,14 +130,14 @@ def list_all(item):
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     first = item.first
-    last = first + 19
-    if last > len(matches):
+    last = first + 20
+    if last >= len(matches):
         last = len(matches)
         next = True
 
     for scrapedurl, scrapedthumbnail, scrapedtitle, extra_info in matches[first:last]:
 
-        year = scrapertools.find_single_match(extra_info, '"tag">(\d{4})<')
+        year = scrapertools.find_single_match(extra_info, '"tag">(\d{4})<') or '-'
         url = host+scrapedurl
         thumbnail = host+scrapedthumbnail.strip()
         title = scrapedtitle
@@ -155,7 +168,7 @@ def list_all(item):
         url_next_page = host+url_next_page
         first = 0
 
-    if url_next_page:
+    if url_next_page and len(matches) > 20:
         itemlist.append(Item(channel=item.channel,title="Siguiente >>", url=url_next_page, action='list_all',
                              first=first))
 
@@ -191,10 +204,10 @@ def seccion(item):
 def seasons(item):
     logger.info()
     itemlist = []
-
+    
     data = get_source(item.url)
 
-    patron = '<strong>Season (\d+)</strong>'
+    patron = r'<strong>(?:Season|Temporada) (\d+)</strong>'
 
     matches = re.compile(patron, re.DOTALL).findall(data)
     infoLabels = item.infoLabels
@@ -236,11 +249,15 @@ def episodesxseason(item):
     logger.info()
     itemlist = []
     season = item.contentSeasonNumber
-    data = get_source(item.url)
-    data = scrapertools.find_single_match(data, '<strong>Season %s</strong>.*?class="les-content"(.*?)</div>' % season)
-    patron = '<a href="([^"]+)">Episode (\d+)'
-    matches = re.compile(patron, re.DOTALL).findall(data)
     infoLabels = item.infoLabels
+    
+    data = get_source(item.url)
+    pat = '<strong>(?:Season|Temporada) %s</strong>.*?class="les-content"(.*?)</div>' % season
+    data = scrapertools.find_single_match(data, pat)
+    
+    patron = '<a href="([^"]+)">(?:Episode|Capitulo) (\d+)'
+    matches = re.compile(patron, re.DOTALL).findall(data)
+    
     for scrapedurl, dataep in matches:
         url = host+scrapedurl
         contentEpisodeNumber = dataep
@@ -281,15 +298,14 @@ def newest(categoria):
         if categoria in ['peliculas']:
             item.url = host +'/peliculas'
         elif categoria == 'infantiles':
-            item.url = host + '/animacion/'
+            item.url = host + '/genre/animacion/'
         elif categoria == 'terror':
-            item.url = host + '/terror/'
+            item.url = host + '/genre/terror/'
         item.first=0
         itemlist = list_all(item)
         if itemlist[-1].title == 'Siguiente >>>':
             itemlist.pop()
     except:
-        import sys
         for line in sys.exc_info():
             logger.error("{0}".format(line))
         return []
@@ -320,13 +336,12 @@ def findvideos(item):
         if not config.get_setting('unify'):
             if language != '':
                 try:
-                    title += ' [%s]' % IDIOMAS[language]
+                    title += ' [%s]' % IDIOMAS.get(language.capitalize(), 'Latino')
                 except:
                     pass
             if quality != '':
                 title += ' [%s]' % quality
-        new_data = get_source(url)
-        url = scrapertools.find_single_match(new_data, "source: '([^']+)',")
+        url = "%s|%s" % (url, host)
         new_item = Item(channel=item.channel,
                         url=url,
                         title= '%s'+ title,
@@ -335,7 +350,7 @@ def findvideos(item):
                         infoLabels = item.infoLabels
                         )
         if language != '':
-            new_item.language = IDIOMAS[language]
+            new_item.language = IDIOMAS.get(language.capitalize(), 'Latino')
         if quality != '':
             new_item.quality = quality
 

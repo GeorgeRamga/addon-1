@@ -3,6 +3,15 @@
 # -*- Created for Alfa-addon -*-
 # -*- By the Alfa Develop Group -*-
 
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+if PY3:
+    import urllib.parse as urllib                                               # Es muy lento en PY2.  En PY3 es nativo
+else:
+    import urllib                                                               # Usamos el nativo de PY2 que es más rápido
+
 import re
 
 from channels import autoplay
@@ -18,7 +27,7 @@ from channelselector import get_thumb
 host = 'https://www.dilo.nu/'
 
 IDIOMAS = {'Español': 'CAST', 'Latino': 'LAT', 'Subtitulado': 'VOSE'}
-list_language = IDIOMAS.values()
+list_language = list(IDIOMAS.values())
 list_quality = []
 list_servers = ['openload', 'streamango', 'powvideo', 'clipwatching', 'streamplay', 'streamcherry', 'gamovideo']
 
@@ -48,6 +57,9 @@ def mainlist(item):
 
     itemlist.append(Item(channel=item.channel, title="Por Años", action="section", url=host + 'catalogue',
                          thumbnail=get_thumb('year', auto=True)))
+
+    itemlist.append(Item(channel=item.channel, title="Por País", action="section", url=host + 'catalogue',
+                         thumbnail=get_thumb('country', auto=True)))
 
     itemlist.append(Item(channel=item.channel, title = 'Buscar', action="search", url= host+'search?s=',
                          thumbnail=get_thumb('search', auto=True)))
@@ -99,17 +111,20 @@ def section(item):
     itemlist = []
     data=get_source(item.url)
 
+    patron = 'input" id="([^"]+)".*?name="([^"]+)".*?'
+    patron += '<label.*?>([^<]+)</label>'
+
     if item.title == 'Generos':
         data = scrapertools.find_single_match(data, '>Todos los generos</button>.*?<button class')
     elif 'Años' in item.title:
         data = scrapertools.find_single_match(data, '>Todos los años</button>.*?<button class')
 
-    patron = 'input" id="([^"]+)".*?name="([^"]+)"'
+    elif 'País' in item.title:
+        data = scrapertools.find_single_match(data, '>Todos los países</button>.*?<button class')
 
     matches = re.compile(patron, re.DOTALL).findall(data)
 
-    for id, name in matches:
-        title = id.capitalize()
+    for id, name, title in matches:
         id = id.replace('-','+')
         url = '%s?%s=%s' % (item.url, name, id)
         itemlist.append(Item(channel=item.channel, title=title, url=url, action='list_all'))
@@ -163,7 +178,6 @@ def latest_shows(item):
 
 
 def seasons(item):
-    import urllib
     logger.info()
 
     itemlist=[]
@@ -197,7 +211,6 @@ def seasons(item):
 
 def episodesxseason(item):
     logger.info()
-    import urllib
     logger.info()
 
     itemlist = []
@@ -263,19 +276,21 @@ def findvideos(item):
 
 def decode_link(enc_url):
     logger.info()
-
+    url = ""
     try:
         new_data = get_source(enc_url)
-        new_enc_url = scrapertools.find_single_match(new_data, 'src="([^"]+)"')
-        if "gamovideo" in new_enc_url: return new_enc_url
-        try:
-            url = httptools.downloadpage(new_enc_url, follow_redirects=False).headers['location']
-        except:
-            if not 'jquery' in new_enc_url:
-                url = new_enc_url
+        if "gamovideo" in enc_url:
+            url = scrapertools.find_single_match(new_data, '<a href="([^"]+)"')
+        else:
+            new_enc_url = scrapertools.find_single_match(new_data, 'src="([^"]+)"')
+
+            try:
+                url = httptools.downloadpage(new_enc_url, follow_redirects=False).headers['location']
+            except:
+                if not 'jquery' in new_enc_url:
+                    url = new_enc_url
     except:
         pass
-
     return url
 
 
@@ -285,6 +300,8 @@ def play(item):
     if item.server not in ['openload', 'streamcherry', 'streamango']:
         item.server = ''
     item.url = decode_link(item.url)
+    if not item.url:
+        return []
     itemlist.append(item.clone())
     itemlist = servertools.get_servers_itemlist(itemlist)
 
@@ -292,7 +309,6 @@ def play(item):
 
 def search(item, texto):
     logger.info()
-    import urllib
     itemlist = []
     texto = texto.replace(" ", "+")
     item.url = item.url + texto

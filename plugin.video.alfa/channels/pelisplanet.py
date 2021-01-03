@@ -1,9 +1,16 @@
 # -*- coding: utf-8 -*-
 
-import re
 import sys
-import urllib
-import urlparse
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
+
+if PY3:
+    import urllib.parse as urlparse                                             # Es muy lento en PY2.  En PY3 es nativo
+else:
+    import urlparse                                                             # Usamos el nativo de PY2 que es más rápido
+
+import re
+
 from platformcode import config, logger
 from core import httptools
 from core import scrapertools
@@ -13,9 +20,6 @@ from core import channeltools
 from core import tmdb
 
 host = "http://www.pelisplanet.com/"
-
-headers = [['User-Agent', 'Mozilla/50.0 (Windows NT 10.0; WOW64; rv:45.0) Gecko/20100101 Firefox/45.0'],
-           ['Referer', host]]
 
 __channel__ = "pelisplanet"
 parameters = channeltools.get_channel_parameters('pelisplanet')
@@ -99,19 +103,19 @@ def sub_search(item):
     data = re.sub(r"\n|\r|\t|&nbsp;|<br>", "", data)
     # logger.info(data)
     patron = '<div class="img">.*?<a href="([^"]+)" title="([^"]+)".*?'
-    patron += '<img.+?src="([^"]+)".*?\(([^\)]+)\)"> </a></div>.*?'
-    patron += 'Ver\s(.*?)\sOnline'
+    patron += r'<img.+?src="([^"]+)".*?\(([^\)]+)\)"> </a></div>.*?'
+    patron += r'Ver\s(.*?)\sOnline'
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for url, name, img, year, scrapedinfo in matches:
-        contentTitle = scrapertools.decodeHtmlentities(scrapedinfo.strip())
+        contentTitle = re.sub(r' / .*| \(.*', '', scrapedinfo)
         plot = item.plot
-        itemlist.append(item.clone(title=name, url=url, contentTitle=contentTitle,
+        itemlist.append(item.clone(title=name, url=url, contentTitle=contentTitle.strip(),
                                    plot=plot, action="findvideos", infoLabels={"year": year},
                                    thumbnail=img, text_color=color3))
 
     paginacion = scrapertools.find_single_match(
-        data, '<a class="page larger" href="([^"]+)">\d+</a>')
+        data, r'<a class="page larger" href="([^"]+)">\d+</a>')
 
     if paginacion:
         itemlist.append(Item(channel=item.channel, action="sub_search",
@@ -120,14 +124,14 @@ def sub_search(item):
 
     tmdb.set_infoLabels(itemlist)
 
-    for item in itemlist:
+    '''for item in itemlist:
         if item.infoLabels['plot'] == '':
             data = httptools.downloadpage(item.url).data
             item.fanart = scrapertools.find_single_match(
                 data, 'meta property="og:image" content="([^"]+)" \/>')
             item.plot = scrapertools.find_single_match(data,
                                                        'Castellano</h3>\s*<p>(.+?)<strong>')
-            item.plot = scrapertools.htmlclean(item.plot)
+            item.plot = scrapertools.htmlclean(item.plot)'''
 
     return itemlist
 
@@ -182,8 +186,7 @@ def peliculas(item):
     matches = re.compile(patron, re.DOTALL).findall(data)
 
     for scrapedurl, quality, year, scrapedtitle, scrapedthumbnail in matches:
-        if '/ ' in scrapedtitle:
-            scrapedtitle = scrapedtitle.partition('/ ')[2]
+
 
         itemlist.append(Item(channel=item.channel,
                              action="findvideos",
@@ -204,12 +207,12 @@ def peliculas(item):
                              title="» Siguiente »", url=paginacion, plot="Página Siguiente",
                              thumbnail='https://raw.githubusercontent.com/Inter95/tvguia/master/thumbnails/next.png'))
 
-    for item in itemlist:
+    '''for item in itemlist:
         if item.infoLabels['plot'] == '':
             data = httptools.downloadpage(item.url).data
             item.fanart = scrapertools.find_single_match(data, 'meta property="og:image" content="([^"]+)" \/>')
             item.plot = scrapertools.find_single_match(data, 'Castellano</h3>\s*<p>(.+?)<strong>')
-            item.plot = scrapertools.htmlclean(item.plot)
+            item.plot = scrapertools.htmlclean(item.plot)'''
 
     return itemlist
 
@@ -238,45 +241,45 @@ def generos(item):
 def findvideos(item):
     logger.info()
     itemlist = []
-
-    datas = httptools.downloadpage(item.url).data
-    datas = re.sub(r"\n|\r|\t|\(.*?\)|\s{2}|&nbsp;", "", datas)
+    from lib import players_parse
+    
+    data = httptools.downloadpage(item.url).data
+    data = re.sub(r"\n|\r|\t|\(.*?\)|\s{2}|&nbsp;", "", data)
     # logger.info(datas)
     patron = '<a id="[^"]+" style="cursor:pointer; cursor: hand" rel="([^"]+)".*?'
-    patron += '<span class="optxt"><span>([^<]+)</span>.*?'
+    patron += '<span class="optxt"><span>(.*?)</span>.*?'
     patron += '<span class="q">([^<]+)</span>'
 
-    matches = re.compile(patron, re.DOTALL).findall(datas)
+    matches = re.compile(patron, re.DOTALL).findall(data)
 
     for scrapedurl, lang, servidores in matches:
         servidores = servidores.lower().strip()
-        if 'streamvips' or 'mediastream' or 'ultrastream' in servidores:
-            data = httptools.downloadpage(scrapedurl, headers=headers).data
-            patronr = "file:'([^']+)',label:'([^']+)',type"
-            matchesr = re.compile(patronr, re.DOTALL).findall(data)
-            for scrapedurl, label in matchesr:
-                title = 'Ver en: [COLOR yellowgreen][%s][/COLOR] [COLOR yellow][%s][/COLOR]' % (servidores.title(),
-                                                                                                item.contentQuality.upper())
+        scrapedurl = players_parse.player_parse(scrapedurl, servidores, host)
+        url_list = []
+        lang = lang.replace('Español ', '')
+        #No funcionan:
+        if 'ultrastream' in servidores or '/meganz' in scrapedurl:
+            continue
+        if 'streamvips' in servidores:
+            data = httptools.downloadpage(scrapedurl, headers={'Referer': host}).data
+            data = re.sub(r"\n|\r|\t|\(.*?\)|\s{2}|&nbsp;", "", data)
+            new_data = scrapertools.find_single_match(data, 'sources: \[(.+?)</body>')
+            if new_data:
+                patronr = "'file': '([^']+)','type': '([^']+)','label': '([^']+)'"
+                matchesr = re.compile(patronr, re.DOTALL).findall(new_data)
+                for surl, _type, label in matchesr:
+                    url_list.append([".%s (%s)" % (_type,label), surl])
+            elif 'vips/' in scrapedurl:
+                scrapedurl = scrapertools.find_single_match(data, '"file": "([^"]+)')
 
-                itemlist.append(item.clone(action="play", title=title, url=scrapedurl, server='directo',
-                                           thumbnail=item.thumbnail, fanart=item.fanart, extra='directo',
-                                           quality=item.contentQuality, language=lang.replace('Español ', '')))
 
-                itemlist.sort(key=lambda it: it.title, reverse=True)
+        title = "Ver en: [COLOR yellowgreen][{}][/COLOR] [COLOR yellow][{}][/COLOR]".format(
+                    servidores.capitalize(),lang)
 
-        if 'drive' not in servidores and 'streamvips' not in servidores and 'mediastream' not in servidores and 'megavips' not in servidores:
-            if 'ultrastream' not in servidores:
-                server = servertools.get_server_from_url(scrapedurl)
-                quality = scrapertools.find_single_match(
-                    datas, '<p class="hidden-xs hidden-sm">.*?class="magnet-download">([^<]+)p</a>')
-                title = "Ver en: [COLOR yellowgreen][{}][/COLOR] [COLOR yellow][{}][/COLOR]".format(
-                    servidores.capitalize(),
-                    quality.upper())
-
-                itemlist.append(item.clone(action='play', title=title, url=scrapedurl, quality=item.quality,
-                                           server=server, language=lang.replace('Español ', ''),
-                                           text_color=color3, thumbnail=item.thumbnail))
-
+        itemlist.append(item.clone(action='play', title=title, url=scrapedurl, quality=item.quality,
+                                  language=lang.replace('Español ', ''), password=url_list,
+                                  text_color=color3, thumbnail=item.thumbnail))
+    itemlist = servertools.get_servers_itemlist(itemlist)
     if config.get_videolibrary_support() and len(itemlist) > 0:
         itemlist.append(Item(channel=item.channel,
                              title='[COLOR yellow]Añadir esta pelicula a la videoteca[/COLOR]',
@@ -285,3 +288,8 @@ def findvideos(item):
                              extra="findvideos", contentTitle=item.contentTitle))
 
     return itemlist
+
+def play(item):
+    if item.url.endswith('.m3u8'):
+        item.server = 'oprem'
+    return [item]

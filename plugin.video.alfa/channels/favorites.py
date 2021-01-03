@@ -2,8 +2,15 @@
 # ------------------------------------------------------------
 # Lista de vídeos favoritos
 # ------------------------------------------------------------
+import sys
+PY3 = False
+if sys.version_info[0] >= 3: PY3 = True; unicode = str; unichr = chr; long = int
 
-import os
+if PY3:
+    import urllib.parse as urllib                                               # Es muy lento en PY2.  En PY3 es nativo
+else:
+    import urllib                                                               # Usamos el nativo de PY2 que es más rápido
+
 import time
 
 from core import filetools
@@ -12,18 +19,12 @@ from core.item import Item
 from platformcode import config, logger
 from platformcode import platformtools
 
-try:
-    # Fijamos la ruta a favourites.xml
-    if config.is_xbmc():
-        import xbmc
+# Fijamos la ruta a favourites.xml
+if config.is_xbmc():
 
-        FAVOURITES_PATH = xbmc.translatePath("special://profile/favourites.xml")
-    else:
-        FAVOURITES_PATH = os.path.join(config.get_data_path(), "favourites.xml")
-except:
-    import traceback
-
-    logger.error(traceback.format_exc())
+    FAVOURITES_PATH = filetools.translatePath("special://profile/favourites.xml")
+else:
+    FAVOURITES_PATH = filetools.join(config.get_data_path(), "favourites.xml")
 
 
 def mainlist(item):
@@ -145,7 +146,6 @@ def renameFavourite(item):
 # Funciones para migrar favoritos antiguos (.txt)
 def readbookmark(filepath):
     logger.info()
-    import urllib
 
     bookmarkfile = filetools.file_open(filepath)
 
@@ -176,14 +176,14 @@ def readbookmark(filepath):
     except:
         plot = lines[4].strip()
 
-    # Campos fulltitle y canal añadidos
+    # Campos contentTitle y canal añadidos
     if len(lines) >= 6:
         try:
-            fulltitle = urllib.unquote_plus(lines[5].strip())
+            contentTitle = urllib.unquote_plus(lines[5].strip())
         except:
-            fulltitle = lines[5].strip()
+            contentTitle = lines[5].strip()
     else:
-        fulltitle = titulo
+        contentTitle = titulo
 
     if len(lines) >= 7:
         try:
@@ -195,16 +195,12 @@ def readbookmark(filepath):
 
     bookmarkfile.close()
 
-    return canal, titulo, thumbnail, plot, server, url, fulltitle
+    return canal, titulo, thumbnail, plot, server, url, contentTitle
 
 
 def check_bookmark(readpath):
     # Crea un listado con las entradas de favoritos
     itemlist = []
-
-    if readpath.startswith("special://") and config.is_xbmc():
-        import xbmc
-        readpath = xbmc.translatePath(readpath)
 
     for fichero in sorted(filetools.listdir(readpath)):
         # Ficheros antiguos (".txt")
@@ -213,11 +209,11 @@ def check_bookmark(readpath):
             time.sleep(0.1)
 
             # Obtenemos el item desde el .txt
-            canal, titulo, thumbnail, plot, server, url, fulltitle = readbookmark(filetools.join(readpath, fichero))
+            canal, titulo, thumbnail, plot, server, url, contentTitle = readbookmark(filetools.join(readpath, fichero))
             if canal == "":
                 canal = "favorites"
-            item = Item(channel=canal, action="play", url=url, server=server, title=fulltitle, thumbnail=thumbnail,
-                        plot=plot, fanart=thumbnail, fulltitle=fulltitle, folder=False)
+            item = Item(channel=canal, action="play", url=url, server=server, title=contentTitle, thumbnail=thumbnail,
+                        plot=plot, fanart=thumbnail, contentTitle=contentTitle, folder=False)
 
             filetools.rename(filetools.join(readpath, fichero), fichero[:-4] + ".old")
             itemlist.append(item)
